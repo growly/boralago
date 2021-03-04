@@ -1,3 +1,3 @@
-# Berkeley Open Reconfigurable Architecture LAyout GeneratOr
+# **B**erkeley **O**pen **R**econfigurable **A**rchitecture **LA**yout **G**enerat**O**r
 
 ##
