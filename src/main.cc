@@ -12,6 +12,11 @@
 
 #include "c_make_header.h"
 
+#include "polygon.h"
+#include "path.h"
+#include "point.h"
+#include "cell.h"
+
 DEFINE_string(example_flag, "default", "for later");
 
 int main(int argc, char **argv) {
@@ -21,10 +26,6 @@ int main(int argc, char **argv) {
   LOG(INFO) << "Boralago " << boralago_VERSION_MAJOR << "." << boralago_VERSION_MINOR
             << std::endl;
 
-  std::vector<std::string> vec = {"a", "b", "c"};
-  std::string vec_joined = absl::StrJoin(vec, ",");
-
-  LOG(INFO) << vec_joined << std::endl;
 
   return EXIT_SUCCESS;
 }
