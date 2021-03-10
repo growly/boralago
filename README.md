@@ -40,3 +40,18 @@
   cmake --build . --target all
   sudo make install
   ```
+
+[skia](https://skia.org/user/build#quick)
+
+(You need the [ninja build system](https://ninja-build.org/).)
+
+  ```
+  git submodule update --init
+  cd skia
+  python2 tools/git-sync-deps
+  bin/gn gen out/Shared --args='is_official_build=true is_component_build=true'
+  bin/gn gen out/Static --args='is_official_build=true
+  tools/install_dependencies.sh
+  ninja -C out/Shared
+  ninja -C out/Static
+  ```
