@@ -8,7 +8,6 @@ configure_file(src/c_make_header.h.in src/c_make_header.h)
 
 #set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_SOURCE_DIR}/cmake/Modules/")
 
-
 find_package(gflags REQUIRED)
 find_package(glog 0.5.0 REQUIRED)
 find_package(absl REQUIRED)
@@ -24,7 +23,8 @@ find_library(Skia_LIBRARY
   PATH ${Skia_BUILD_DIR}/trunk/out/Release)
 
 add_executable(boralago
-                src/main.cc)
+                src/main.cc
+                src/stick_cell.cc)
 
 target_include_directories(boralago PUBLIC
                            "${PROJECT_BINARY_DIR}/src"

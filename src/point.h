@@ -8,12 +8,13 @@ namespace boralago {
 
 class Point {
  public:
+  Point() = default;
   Point(const int64_t x, const int64_t y)
       : x_(x),
         y_(y) {}
 
-  const int64_t &x() { return x_; }
-  const int64_t &y() { return y_; }
+  const int64_t &x() const { return x_; }
+  const int64_t &y() const { return y_; }
 
   void set_x(const int64_t &x) { x_ = x; }
   void set_y(const int64_t &y) { y_ = y; }

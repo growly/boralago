@@ -4,7 +4,6 @@
 #include <vector>
 
 #include "point.h"
-#include "path.h"
 
 namespace boralago {
 
@@ -12,6 +11,7 @@ class Cell {
  public:
 
  private:
+  std::vector<Rectangle> rectangles_;
 };
 
 }  // namespace boralago
