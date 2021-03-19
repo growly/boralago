@@ -28,7 +28,7 @@ message Polygon {
   repeated Point vertices = 2;
 }
 
-message LayerShapes {
+message LayeredShapes {
   Layer layer = 1;
   repeated Rectangle rectangles = 2;
   repeated Polygon polygons = 3;
@@ -38,12 +38,23 @@ message LayerShapes {
 // cell_name.
 message CellChunk {
   string cell_name = 1;
+
+  // This can't just be a map because "Layer" is not an appropriate type for a
+  // key (i.e. can't be sure there's a hash function for it).
   repeated LayerShapes shapes = 2;
+
+  // Instances of other Cells in this Cell.
+  repeated Instance instances = 3;
 }
 
 // Optional metadata for a cell with the given cell_name.
 message CellInfo {
   string cell_name = 1;
+
+  // I don't actually know if this is necessary. But it's an example of a way
+  // to define additional information about a cell in a separate message.
+  string author = 100;
+  string copyright = 101;
 }
 
 message Instance {
@@ -62,7 +73,7 @@ message ChunkLibrary {
 }
 
 message Geometry {
-  // The top instance name.
+  // The top instance in the hierarchy.
   string top = 1;
 
   // A list of the instances of cells which 
