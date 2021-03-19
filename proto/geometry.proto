@@ -60,7 +60,7 @@ message CellInfo {
 message Instance {
   // The origin point for this instance, relative to which all child primitives
   // are placed.
-  string name = 1;
+  string name = 1;  // TODO(aryap): Do we need this?
   string cell_name = 3;
   int32 rotation_degrees = 4;
   Point lower_left = 5;
@@ -73,11 +73,8 @@ message ChunkLibrary {
 }
 
 message Geometry {
-  // The top instance in the hierarchy.
-  string top = 1;
-
-  // A list of the instances of cells which 
-  repeated Instance instances = 2;
+  // The top instance.
+  Instance top_instance = 1;
 
   // Definitions of cell chunks which implicity define cells.
   repeated ChunkLibrary chunk_libraries = 100;
