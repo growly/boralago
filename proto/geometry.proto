@@ -22,7 +22,7 @@ message Rectangle {
 
 message Polygon {
   // The layer this polygon sits on.
-  int64 layer = 1;
+  Layer layer = 1;
 
   // The list of vertices defining the (convex) polygon.
   // We assume that the last and first point will also be joined by a line
@@ -30,12 +30,24 @@ message Polygon {
   repeated Point vertices = 2;
 }
 
-message Instance {
-  repeated Rectangle rectangles = 1;
-  repeated Polygon polygons = 2;
+message ChunkOfShapes {
+  repeated Polygon polygons = 1; // let's say at most 1000 
+  repeated Rectangle rectangles = 1; // imagine, say, 1B entries
 }
 
-message PlacedInstance {
+message Layer {
+  layer: int
+  datatype: int 
+}
+
+message Cell { // old folks call this a "Cell"
+// all the geom info for a section of layout 
+
+  ChunkOfPolygons polygons = 2;
+  repeated Instance instances = 3;
+}
+
+message Instance { // old folks would call this "instance"
   // The origin point for this instance, relative to which all child primitives
   // are placed.
   Point lower_left = 1;
@@ -46,10 +58,16 @@ message PlacedInstance {
     // TODO(aryap): Either explicitly or implicitly list which URIs make sense.
     string source_uri = 2;
 
-    Instance instance = 3;
+    string instance = 3;
   }
 }
 
-message Geometry {
+message Library {
+  metadata: Whatever, 
+  cells: repeated Whoever // flat, but names have `top.mid1.bot2` or `top::mid1` etc 
+}
+
+message Geometry { // Not really sure what this is! 
   repeated PlacedInstance placed_instances = 1;
 }
+
