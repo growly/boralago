@@ -41,7 +41,7 @@ message CellChunk {
 
   // This can't just be a map because "Layer" is not an appropriate type for a
   // key (i.e. can't be sure there's a hash function for it).
-  repeated LayerShapes shapes = 2;
+  repeated LayeredShapes shapes = 2;
 
   // Instances of other Cells in this Cell.
   repeated Instance instances = 3;
