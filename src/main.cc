@@ -28,7 +28,8 @@ int main(int argc, char **argv) {
   poly->set_layer(3);
   poly->set_net("I");
   poly->set_start({0, 0});
-  poly->AddSegment({50, 100});
+  poly->AddSegment({0, 100});
+  poly->AddSegment({100, 100});
 
   return EXIT_SUCCESS;
 }

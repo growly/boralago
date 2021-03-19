@@ -41,6 +41,21 @@
   sudo make install
   ```
 
+[protocolbuffers/protobuf](https://github.com/protocolbuffers/protobuf/tree/master/src)
+
+  ```
+  sudo apt install autoconf automake libtool curl make g++ unzip
+  git clone https://github.com/protocolbuffers/protobuf.git
+  cd protobuf
+  git submodule update --init --recursive
+  ./autogen.sh
+  ./configure
+  make
+  make check
+  sudo make install
+  sudo ldconfig # refresh shared library cache.
+  ```
+
 [skia](https://skia.org/user/build#quick)
 
 (You need the [ninja build system](https://ninja-build.org/).)

@@ -1,3 +1,4 @@
 // The configured options and settings for boralago.
 #define boralago_VERSION_MAJOR @boralago_VERSION_MAJOR@
 #define boralago_VERSION_MINOR @boralago_VERSION_MINOR@
+#define protobuf_VERSION @Protobuf_VERSION@
