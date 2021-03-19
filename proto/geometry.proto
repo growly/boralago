@@ -21,7 +21,7 @@ message Rectangle {
 }
 
 message Polygon {
-  // The layer this polygon sits on
+  // The layer this polygon sits on.
   int64 layer = 1;
 
   // The list of vertices defining the (convex) polygon.
@@ -40,12 +40,14 @@ message PlacedInstance {
   // are placed.
   Point lower_left = 1;
 
-  // If present, the Instance message to be placed is fetched from the given
-  // location.
-  // TODO(aryap): Either explicitly or implicitly list which URIs make sense.
-  string source_uri = 2;
+  oneof {
+    // If present, the Instance message to be placed is fetched from the given
+    // location.
+    // TODO(aryap): Either explicitly or implicitly list which URIs make sense.
+    string source_uri = 2;
 
-  Instance instance = 3;
+    Instance instance = 3;
+  }
 }
 
 message Geometry {
