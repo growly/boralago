@@ -8,11 +8,13 @@ message Point {
   int64 y = 2;
 }
 
+message Layer {
+  int64 something = 1;
+  int64 something_else = 2;
+}
+
 // Rectangle primitive.
 message Rectangle {
-  // The layer this rectangle sits on.
-  int64 layer = 1;
-
   // The lower-left corner of the rectangle.
   Point lower_left = 2;
 
@@ -21,35 +23,55 @@ message Rectangle {
 }
 
 message Polygon {
-  // The layer this polygon sits on.
-  int64 layer = 1;
-
-  // The list of vertices defining the (convex) polygon.
-  // We assume that the last and first point will also be joined by a line
-  // segment.
+  // The list of vertices defining the (convex) polygon. We assume that the
+  // last and first point will also be joined by a line segment.
   repeated Point vertices = 2;
 }
 
-message Instance {
-  repeated Rectangle rectangles = 1;
-  repeated Polygon polygons = 2;
+message LayerShapes {
+  Layer layer = 1;
+  repeated Rectangle rectangles = 2;
+  repeated Polygon polygons = 3;
 }
 
-message PlacedInstance {
+// A "Cell" is defined by taking the union of all CellChunks with the same
+// cell_name.
+message CellChunk {
+  string cell_name = 1;
+  repeated LayerShapes shapes = 2;
+}
+
+// Optional metadata for a cell with the given cell_name.
+message CellInfo {
+  string cell_name = 1;
+}
+
+message Instance {
   // The origin point for this instance, relative to which all child primitives
   // are placed.
-  Point lower_left = 1;
+  string name = 1;
+  string cell_name = 3;
+  int32 rotation_degrees = 4;
+  Point lower_left = 5;
+}
 
-  oneof {
-    // If present, the Instance message to be placed is fetched from the given
-    // location.
-    // TODO(aryap): Either explicitly or implicitly list which URIs make sense.
-    string source_uri = 2;
-
-    Instance instance = 3;
-  }
+// A collection of chunks of cells.
+message ChunkLibrary {
+  repeated CellInfo infos = 1;
+  repeated CellChunk chunks = 2;
 }
 
 message Geometry {
-  repeated PlacedInstance placed_instances = 1;
+  // The top instance name.
+  string top = 1;
+
+  // A list of the instances of cells which 
+  repeated Instance instances = 2;
+
+  // Definitions of cell chunks which implicity define cells.
+  repeated ChunkLibrary chunk_libraries = 100;
+
+  // Pointers to sources of chunk libraries possibly necessary to complete this
+  // layout.
+  repeated string chunk_library_uris = 200;
 }
