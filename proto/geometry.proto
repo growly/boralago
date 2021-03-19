@@ -1,0 +1,53 @@
+syntax = "proto3";
+
+package vlsiraptor;
+
+// Represents a point in our (Cartesian) layout space.
+message Point {
+  int64 x = 1;
+  int64 y = 2;
+}
+
+// Rectangle primitive.
+message Rectangle {
+  // The layer this rectangle sits on.
+  int64 layer = 1;
+
+  // The lower-left corner of the rectangle.
+  Point lower_left = 2;
+
+  int64 width = 3;
+  int64 height = 4;
+}
+
+message Polygon {
+  // The layer this polygon sits on
+  int64 layer = 1;
+
+  // The list of vertices defining the (convex) polygon.
+  // We assume that the last and first point will also be joined by a line
+  // segment.
+  repeated Point vertices = 2;
+}
+
+message Instance {
+  repeated Rectangle rectangles = 1;
+  repeated Polygon polygons = 2;
+}
+
+message PlacedInstance {
+  // The origin point for this instance, relative to which all child primitives
+  // are placed.
+  Point lower_left = 1;
+
+  // If present, the Instance message to be placed is fetched from the given
+  // location.
+  // TODO(aryap): Either explicitly or implicitly list which URIs make sense.
+  string source_uri = 2;
+
+  Instance instance = 3;
+}
+
+message Geometry {
+  repeated PlacedInstance placed_instances = 1;
+}
