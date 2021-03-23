@@ -33,6 +33,8 @@ add_executable(boralago
                 src/main.cc
                 src/stick_cell.cc
                 src/stick_inflator.cc
+                src/poly_line.cc
+                src/renderer.cc
                 ${PROTO_SRCS}
                 ${PROTO_HDRS})
 

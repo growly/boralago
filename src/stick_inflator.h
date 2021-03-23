@@ -8,6 +8,7 @@
 
 #include "point.h"
 #include "poly_line.h"
+#include "stick_cell.h"
 #include "inflator_rules.pb.h"
 
 namespace boralago {
@@ -15,6 +16,9 @@ namespace boralago {
 class StickInflator {
  public:
   StickInflator(const InflatorRules &rules);
+
+  // Return a laid-out version of the stick diagram.
+  void Inflate(const StickCell &stick_cell);
 
  private:
   std::unordered_map<uint64_t, InflatorRules> rules_by_layer_;

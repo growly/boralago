@@ -2,8 +2,6 @@
 #define POLY_LINE_H_
 
 #include <cstdint>
-#include <glog/logging.h>
-#include <vector>
 
 #include "line_segment.h"
 #include "point.h"
@@ -24,6 +22,8 @@ class PolyLine : public Shape {
     }
   }
 
+  const std::pair<Point, Point> GetBoundingBox() const override;
+
   void set_start(const Point &start) { start_ = start; }
   const Point &start() const { return start_; }
 
@@ -31,15 +31,9 @@ class PolyLine : public Shape {
     AddSegment(point, 0);
   }
 
-  void AddSegment(const Point &to, const uint64_t width) {
-    int64_t last_x = segments_.empty() ? start_.x() : segments_.back().end.x();
-    int64_t last_y = segments_.empty() ? start_.y() : segments_.back().end.y();
-    if (to.x() != last_x && to.y() != last_y) {
-      LOG(FATAL) << "PolyLine segments must be rectilinear. Make sure the new "
-                 << "x == last_x or y == last_y.";
-    }
-    segments_.push_back(LineSegment{to, width});
-  }
+  void AddSegment(const Point &to, const uint64_t width);
+
+  const std::vector<LineSegment> &segments() const { return segments_; }
 
  private:
   Point start_;

@@ -14,6 +14,10 @@ class StickCell {
   void AddStick(const PolyLine &stick);
   PolyLine *AddStick();
 
+  const std::vector<std::unique_ptr<PolyLine>> &sticks() const { return sticks_; }
+
+  const std::pair<Point, Point> GetBoundingBox() const;
+
  private:
   std::vector<std::unique_ptr<PolyLine>> sticks_;
 };

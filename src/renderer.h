@@ -1,9 +1,13 @@
 #ifndef RENDERER_H_
 #define RENDERER_H_
 
+#include <cstdint>
 #include <string>
 
-#include "cell.h"
+#include <core/SkPoint.h>
+
+#include "point.h"
+#include "stick_cell.h"
 
 class SkCanvas;
 
@@ -11,15 +15,22 @@ namespace boralago {
 
 class Renderer {
  public:
-  class Renderer(const Cell &cell)
-      : cell_(cell) {}
+  Renderer(uint64_t width_px, uint64_t height_px)
+      : width_px_(width_px),
+        height_px_(height_px) {
+  }
 
-  void WritePNG(const std::string &filename);
+  void RenderToPNG(
+      const StickCell &stick_cell,
+      const std::string &filename);
 
  private:
-  void DrawCell(SkCanvas *canvas);
+  void DrawStickCell(const StickCell &stick_cell, SkCanvas *canvas);
 
-  const Cell &cell_;
+  SkPoint MapToSkPoint(const Point &point);
+
+  uint64_t width_px_;
+  uint64_t height_px_;
 };
 
 }  // namespace boralago
