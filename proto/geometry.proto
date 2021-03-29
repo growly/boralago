@@ -20,6 +20,9 @@ message QualifiedName {
 
 // Rectangle primitive.
 message Rectangle {
+  // The name of the net to which this rectangle is connected, if any.
+  string net = 1;
+
   // The lower-left corner of the rectangle.
   Point lower_left = 2;
 
@@ -28,6 +31,9 @@ message Rectangle {
 }
 
 message Polygon {
+  // The name of the net to which this polygon is connected, if any.
+  string net = 1;
+
   // The list of vertices defining the (convex) polygon. We assume that the
   // last and first point will also be joined by a line segment.
   repeated Point vertices = 2;
@@ -38,38 +44,6 @@ message LayeredShapes {
   repeated Rectangle rectangles = 2;
   repeated Polygon polygons = 3;
 }
-
-/* Wholesale commenting streaming nonsense for now.
- *
- * // A "Cell" is defined by taking the union of all CellChunks with the same
- * // cell_name.
- * message CellChunk {
- *   string cell_name = 1;
- * 
- *   // This can't just be a map because "Layer" is not an appropriate type for a
- *   // key (i.e. can't be sure there's a hash function for it).
- *   repeated LayeredShapes shapes = 2;
- * 
- *   // Instances of other Cells in this Cell.
- *   repeated Instance instances = 3;
- * }
- * 
- * // Optional metadata for a cell with the given cell_name.
- * message CellInfo {
- *   string cell_name = 1;
- * 
- *   // I don't actually know if this is necessary. But it's an example of a way
- *   // to define additional information about a cell in a separate message.
- *   string author = 100;
- *   string copyright = 101;
- * }
- *
- * // A collection of chunks of cells.
- * message ChunkLibrary {
- *   repeated CellInfo infos = 1;
- *   repeated CellChunk chunks = 2;
- * }
- */
 
 // A monolithic message describing one cell.
 message Cell {
@@ -100,11 +74,4 @@ message Instance {
 message Geometry {
   // The top instance.
   Instance top_instance = 1;
-
-  // // Definitions of cell chunks which implicity define cells.
-  // repeated ChunkLibrary chunk_libraries = 100;
-
-  // Pointers to sources of chunk libraries possibly necessary to complete this
-  // layout.
-  //repeated string chunk_library_uris = 200;
 }
