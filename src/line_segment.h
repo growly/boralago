@@ -5,6 +5,12 @@
 
 namespace boralago {
 
+enum LineOrientation {
+  kOther,
+  kVertical,
+  kHorizontal
+};
+
 enum AnchorPosition {
   kCenterAutomatic,   // Grow wide when vertical, tall when horizontal.
   kBottom,

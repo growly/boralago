@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <string>
 
+#include <core/SkColor.h>
 #include <core/SkPoint.h>
 
 #include "point.h"
@@ -28,6 +29,7 @@ class Renderer {
   void DrawStickCell(const StickCell &stick_cell, SkCanvas *canvas);
 
   SkPoint MapToSkPoint(const Point &point);
+  SkColor MapLayerToSkColor(int64_t layer);
 
   uint64_t width_px_;
   uint64_t height_px_;

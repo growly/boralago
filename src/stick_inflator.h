@@ -7,6 +7,7 @@
 #include <unordered_map>
 
 #include "point.h"
+#include "polygon.h"
 #include "poly_line.h"
 #include "stick_cell.h"
 #include "inflator_rules.pb.h"
@@ -19,6 +20,8 @@ class StickInflator {
 
   // Return a laid-out version of the stick diagram.
   void Inflate(const StickCell &stick_cell);
+
+  void InflatePolyLine(const PolyLine &line, Polygon *polygon);
 
  private:
   std::unordered_map<uint64_t, InflatorRules> rules_by_layer_;

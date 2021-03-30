@@ -10,11 +10,14 @@ namespace boralago {
 
 class Polygon {
  public:
+  Polygon() = default;
   Polygon(const std::vector<Point> &vertices) {
     for (const auto &vertex : vertices) {
       vertices_.push_back(vertex);
     }
   }
+
+  std::vector<Point> &vertices() { return vertices_; }
 
  private:
   std::vector<Point> vertices_;

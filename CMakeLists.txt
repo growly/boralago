@@ -30,9 +30,12 @@ find_library(Skia_LIBRARY
   PATH ${Skia_BUILD_DIR}/trunk/out/Release)
 
 add_executable(boralago
+                src/cell.cc
+                src/line.cc
                 src/main.cc
                 src/stick_cell.cc
                 src/stick_inflator.cc
+                src/point.cc
                 src/poly_line.cc
                 src/renderer.cc
                 ${PROTO_SRCS}

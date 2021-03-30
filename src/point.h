@@ -1,6 +1,7 @@
 #ifndef POINT_H_
 #define POINT_H_
 
+#include <ostream>
 #include <cstdint>
 #include <vector>
 
@@ -23,6 +24,8 @@ class Point {
   int64_t x_;
   int64_t y_;
 };
+
+std::ostream &operator<<(std::ostream &os, const Point &point);
 
 }  // namespace boralago
 

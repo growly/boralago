@@ -35,7 +35,7 @@ int main(int argc, char **argv) {
   poly->AddSegment({100, 100});
 
   boralago::PolyLine *some_region = inverter.AddStick();
-  some_region->set_layer(3);
+  some_region->set_layer(5);
   some_region->set_net("VDD");
   some_region->set_start({100, 100});
   some_region->AddSegment({100, 200});
