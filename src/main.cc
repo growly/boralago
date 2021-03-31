@@ -31,8 +31,8 @@ int main(int argc, char **argv) {
   poly->set_layer(3);
   poly->set_net("I");
   poly->set_start({0, 0});
-  poly->AddSegment({0, 100});
-  poly->AddSegment({100, 100});
+  poly->AddSegment({0, 100}, 25);
+  poly->AddSegment({100, 100}, 25);
 
   boralago::PolyLine *some_region = inverter.AddStick();
   some_region->set_layer(5);
@@ -43,10 +43,10 @@ int main(int argc, char **argv) {
   boralago::InflatorRules rules;
   boralago::StickInflator inflator(rules);
 
-  inflator.Inflate(inverter);
+  boralago::Cell cell = inflator.Inflate(inverter);
 
   boralago::Renderer renderer(1024, 1024);
-  renderer.RenderToPNG(inverter, "test.png");
+  renderer.RenderToPNG(inverter, cell, "test.png");
 
   return EXIT_SUCCESS;
 }

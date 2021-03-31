@@ -1,8 +1,10 @@
 #include "stick_inflator.h"
 
 #include <glog/logging.h>
+#include <cmath>
 #include <memory>
 
+#include "cell.h"
 #include "point.h"
 #include "line.h"
 #include "poly_line.h"
@@ -18,119 +20,171 @@ StickInflator::StickInflator(const InflatorRules &rules) {
   }
 }
 
-void StickInflator::Inflate(const StickCell &stick_cell) {
+Cell StickInflator::Inflate(const StickCell &stick_cell) {
+  Cell cell;
   for (const auto &stick : stick_cell.sticks()) {
     LOG_IF(FATAL, !stick) << "stick is nullptr?!";
 
-    LOG(INFO) << "stick!";
     Polygon polygon;
     InflatePolyLine(*stick, &polygon);
+    auto bb = polygon.GetBoundingBox();
+    LOG(INFO) << polygon << " bounded by ll= " << bb.first << " ur= " << bb.second;
+    cell.AddPolygon(polygon);
   }
-  LOG(INFO) << "INFLATE HERE.";
+  return cell;
 }
 
+// So, you could do this in one pass by inflating every central stick into its
+// bounding lines, but that would create two problems when joining one segment
+// to its immediate neighbour:
+//                         1) deciding which two lines to intersect;
+//                         2) finding their intersection.
+//
+// The inner and outer lines always intersect. 
+//
+// One way to determine which the "inner" and "outer" lines are is to
+// bisect the angle ABC between the two joining segments AB &  BC, creating
+// BD, then find the intersection E of the bisector BD with the line
+// created by joining the distant ends of the joining segments intersection
+// of the corner AC onto that line. The inner and outer lines can then be
+// measured by measuring their projection from E onto the line defined by
+// BD.
+//
+//     (A)
+//     +
+//     |\    (D)
+//     | -  /
+//     |  \/ (E)
+//     |  /\
+//     | /  -
+//     |/    \
+// (B) +------+ (C)
+//    /
+//   /
+//
+// The more naive (and simple) way seems to be to walk down the segments in one
+// direction and then back in the other. Treating them as vectors we can either
+// keep track of the direction we're going in or reverse the start/end
+// positions to reverse the vector itself. In either case, we take care to
+// generate the shifted line in the same position relative to all vectors.
+//
+// Because we determine the orientation by finding the vector's angle to the
+// horizon, we created a shifted copy of the vector in a consistent direction
+// relative to the vector's own bearing.
 void StickInflator::InflatePolyLine(const PolyLine &polyline, Polygon *polygon) {
   LOG_IF(FATAL, polyline.segments().empty()) << "Inflating empty PolyLine";
 
+  std::vector<Line> line_stack;
+  std::unique_ptr<Line> last_shifted_line;
+
   Point start = polyline.start();
-  std::unique_ptr<Line> last_centre_line;
-  std::vector<std::unique_ptr<Line>> outline_stack;
+  // Turn the segments into Lines, so we can deal with them.
+  for (const auto &segment : polyline.segments()) {
+    line_stack.emplace_back(start, segment.end);
+    Line &line = line_stack.back();
 
-  for (size_t i = 0; i < polyline.segments().size(); ++i) {
-    const PolyLine &segment = polyline.segments().at(i);
-    std::unique_ptr<Line> line(new Line(start, segment.end));
+    // AnchorPosition growth_anchor;
 
-    AnchorPosition growth_anchor;
+    // LineOrientation orientation = LineOrientation::kOther;
+    // if (segment.end.x() == start.x()) {
+    //   orientation = LineOrientation::kVertical;
+    //   growth_anchor = AnchorPosition::kCenterVertical;
+    // } else if (segment.end.y() == start.y()) {
+    //   orientation = LineOrientation::kHorizontal;
+    //   growth_anchor = AnchorPosition::kCenterHorizontal;
+    // }
 
-    LineOrientation orientation = LineOrientation::kOther;
-    if (next.x() == last.x()) {
-      orientation = LineOrientation::kVertical;
-      growth_anchor = AnchorPosition::kCenterVertical;
-    } else if (next.y() == last.y()) {
-      orientation = LineOrientation::kHorizontal;
-      growth_anchor = AnchorPosition::kCenterHorizontal;
-    }
+    // growth_anchor = segment.growth_anchor == AnchorPosition::kCenterAutomatic ?
+    //     growth_anchor : segment.growth_anchor;
 
-    growth_anchor = segment.growth_anchor == AnchorPosition::kCenterAutomatic ?
-        growth_anchor : segment.growth_anchor;
+    double width = segment.width == 0 ? 100 : static_cast<double>(segment.width);
 
-    uint64_t width = segment.width == 0 ? 100 : segment.width;
-    // TODO(aryap): Integer division can lead to precision loss here,
-    // so we make sure we recover it.
-    uint64_t half_width = width/2;
-    uint64_t remaining_width = width - half_width;
+    std::unique_ptr<Line> shifted_line(GenerateShiftedLine(line, width));
+    LOG(INFO) << "Shifted " << line << " to " << *shifted_line;
 
-    Line low;
-    Line high;
-
-    // Determine which way the polyline is being inflated.
-    switch (growth_anchor) {
-      case AnchorPosition::kCenterVertical:
-        low = Line(Point(last.x(), last.y() - half_width),
-                   Point(next.x(), next.y() - half_width));
-        high = Line(Point(last.x(), last.y() + remaining_width),
-                    Point(next.x(), next.y() + remaining_width));
-        break;
-      case AnchorPosition::kCenterHorizontal:
-        low = Line(Point(last.x() - half_width, last.y()),
-                   Point(next.x() - half_width, next.y()));
-        high = Line(Point(last.x() + remaining_width, last.y()),
-                    Point(next.x() + remaining_width, next.y()));
-      case AnchorPosition::kCenterAutomatic:
-      default:
-        LOG(FATAL) << "Unsupported growth_anchor value: " << growth_anchor;
-    }
-
-    if (!last_centre_line) {
-      start = line->start();
-      last_centre_line = std::move(line);
-      continue;
-    }
-
-    // We have now inflated the stick into a rectangle. We have to find where
-    // its corners join the previous segment's corners.
-    //
-    // There are two problems: 1) deciding which two lines to intersect;
-    //                         2) finding their intersection.
-    //
-    // The inner and outer lines always intersect. 
-    //
-    // One way to determine which the "inner" and "outer" lines are is to
-    // bisect the angle ABC between the two joining segments AB &  BC, creating
-    // BD, then find the intersection E of the bisector BD with the line
-    // created by joining the distant ends of the joining segments intersection
-    // of the corner AC onto that line. The inner and outer lines can then be
-    // measured by measuring their projection from E onto the line defined by
-    // BD.
-    //
-    //     (A)
-    //     +
-    //     |\    (D)
-    //     | -  /
-    //     |  \/ (E)
-    //     |  /\
-    //     | /  -
-    //     |/    \
-    // (B) +------+ (C)
-    //    /
-    //   /
-    //
-    // The naive, and less computationally intensive, way to do this is just to
-    // figure out which way the corner is turning expliclty:
-
-
-    Point intersection;
-    if (Line::Intersect(low, high, &intersection)) {
-      LOG(INFO) << low.start() << ", " << low.end() << "; " << high.start() << ", " << high.end();
-      LOG(INFO) << intersection;
+    // Modify the last line we created to intersect with this new one.
+    if (last_shifted_line != nullptr) {
+      Point intersection;
+      if (!Line::Intersect(*last_shifted_line, *shifted_line, &intersection)) {
+        LOG(FATAL) << "The last line we created and the newly shifted line "
+                   << "never intersect: " << *last_shifted_line << " and "
+                   << *shifted_line;
+      }
+      polygon->AddVertex(intersection);
     } else {
-      LOG(INFO) << "no intersection";
+      // Set the starting point.
+      polygon->AddVertex(shifted_line->start());
+    }
+    last_shifted_line = std::move(shifted_line);
+    start = segment.end;
+  }
+  polygon->AddVertex(last_shifted_line->end());
+
+  last_shifted_line = nullptr;
+  // TODO(aryap): lmao if you use size_t here it underflows and never breaks
+  // the loop.
+  for (int i = line_stack.size() - 1; i >= 0; --i) {
+    Line &line = line_stack.at(i);
+    line.Reverse();
+
+    const LineSegment &segment = polyline.segments().at(i);
+    double width = segment.width == 0 ? 100 : static_cast<double>(segment.width);
+
+    std::unique_ptr<Line> shifted_line(GenerateShiftedLine(line, width));
+    LOG(INFO) << "Shifted " << line << " to " << *shifted_line;
+
+    if (last_shifted_line != nullptr) {
+      Point intersection;
+      if (!Line::Intersect(*last_shifted_line, *shifted_line, &intersection)) {
+        LOG(FATAL) << "The last line we created and the newly shifted line "
+                   << "never intersect: " << *last_shifted_line << " and "
+                   << *shifted_line;
+      }
+      polygon->AddVertex(intersection);
+    } else {
+      // Set the starting point.
+      polygon->AddVertex(shifted_line->start());
     }
 
-    start = segment.end;
-    last_centre_line = std::move(line);
-    //polygon->vertices() = {start_low, start_high, end_low, end_high};
+    last_shifted_line = std::move(shifted_line);
   }
+  // We flipped all the lines on the way back, so the last point is the 'end'
+  // position of the first line in the list.
+  polygon->AddVertex(last_shifted_line->end());
+}
+
+Line *StickInflator::GenerateShiftedLine(
+    const Line &source, double width,
+    double extension_source, double extension_end) {
+  // TODO(aryap): Integer division can lead to precision loss here,
+  // so we make sure we recover it.
+  double half_width = static_cast<double>(width) / 2.0;
+
+  double theta = source.AngleToHorizon();
+
+  int64_t shift_x = static_cast<int64_t>(std::sin(theta) * half_width);
+  int64_t shift_y = static_cast<int64_t>(std::cos(theta) * half_width);
+
+  Line *shifted_line = new Line(source);
+  shifted_line->Shift(-shift_x, shift_y);
+
+  if (extension_source > 0.0) {
+    int64_t extension_x =
+        static_cast<int64_t>(std::cos(theta) * extension_source);
+    int64_t extension_y =
+        static_cast<int64_t>(std::sin(theta) * extension_source);
+    shifted_line->ShiftStart(extension_x, extension_y);
+  }
+
+  if (extension_end > 0.0) {
+    int64_t extension_x =
+        static_cast<int64_t>(std::cos(theta) * extension_end);
+    int64_t extension_y =
+        static_cast<int64_t>(std::sin(theta) * extension_end);
+    shifted_line->ShiftEnd(extension_x, extension_y);
+  }
+
+  return shifted_line;
 }
 
 }  // namespace boralago

@@ -5,10 +5,11 @@
 #include <vector>
 
 #include "point.h"
+#include "shape.h"
 
 namespace boralago {
 
-class Polygon {
+class Polygon : public Shape {
  public:
   Polygon() = default;
   Polygon(const std::vector<Point> &vertices) {
@@ -17,11 +18,19 @@ class Polygon {
     }
   }
 
-  std::vector<Point> &vertices() { return vertices_; }
+  void AddVertex(const Point &point) {
+    vertices_.push_back(point);
+  }
+
+  const std::pair<Point, Point> GetBoundingBox() const override;
+
+  const std::vector<Point> &vertices() const { return vertices_; }
 
  private:
   std::vector<Point> vertices_;
 };
+
+std::ostream &operator<<(std::ostream &os, const Polygon &polygon);
 
 }  // namespace boralago
 

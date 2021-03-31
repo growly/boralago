@@ -22,7 +22,7 @@ class Shape {
   virtual const std::pair<Point, Point> GetBoundingBox() const = 0;
 
   void set_layer(const int64_t layer) { layer_ = layer; }
-  int64_t layer() { return layer_; }
+  int64_t layer() const { return layer_; }
 
   void set_net(const std::string &net) { net_ = net; }
   const std::string &net() { return net_; }
