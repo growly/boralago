@@ -4,26 +4,26 @@
 #include <memory>
 
 #include "point.h"
-#include "stick_cell.h"
+#include "poly_line_cell.h"
 
 namespace boralago {
 
-void StickCell::AddStick(const PolyLine &stick) {
-  sticks_.emplace_back(new PolyLine(stick));
+void PolyLineCell::AddPolyLine(const PolyLine &poly_line) {
+  poly_lines_.emplace_back(new PolyLine(poly_line));
 }
 
-PolyLine *StickCell::AddStick() {
-  PolyLine *stick = new PolyLine();
-  sticks_.emplace_back(stick);
-  return stick;
+PolyLine *PolyLineCell::AddPolyLine() {
+  PolyLine *poly_line = new PolyLine();
+  poly_lines_.emplace_back(poly_line);
+  return poly_line;
 }
 
-const std::pair<Point, Point> StickCell::GetBoundingBox() const {
-  if (sticks_.empty()) {
+const std::pair<Point, Point> PolyLineCell::GetBoundingBox() const {
+  if (poly_lines_.empty()) {
     return std::make_pair(Point(0, 0), Point(0, 0));
   }
 
-  auto &first_box = sticks_.front()->GetBoundingBox();
+  auto &first_box = poly_lines_.front()->GetBoundingBox();
   const Point &lower_left = first_box.first;
   const Point &upper_right = first_box.second;
   int64_t min_x = lower_left.x();
@@ -31,8 +31,8 @@ const std::pair<Point, Point> StickCell::GetBoundingBox() const {
   int64_t max_x = upper_right.x();
   int64_t max_y = upper_right.y();
 
-  for (size_t i = 2; i < sticks_.size(); ++i) {
-    auto &bounds = sticks_[i]->GetBoundingBox();
+  for (size_t i = 2; i < poly_lines_.size(); ++i) {
+    auto &bounds = poly_lines_[i]->GetBoundingBox();
     const Point &lower_left = bounds.first;
     const Point &upper_right = bounds.second;
     min_x = std::min(lower_left.x(), min_x);

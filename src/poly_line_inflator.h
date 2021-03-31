@@ -1,5 +1,5 @@
-#ifndef STICK_INFLATOR_H_
-#define STICK_INFLATOR_H_
+#ifndef POLY_LINE_INFLATOR_H_
+#define POLY_LINE_INFLATOR_H_
 
 #include <cstdint>
 #include <vector>
@@ -11,17 +11,17 @@
 #include "line.h"
 #include "polygon.h"
 #include "poly_line.h"
-#include "stick_cell.h"
+#include "poly_line_cell.h"
 #include "inflator_rules.pb.h"
 
 namespace boralago {
 
-class StickInflator {
+class PolyLineInflator {
  public:
-  StickInflator(const InflatorRules &rules);
+  PolyLineInflator(const InflatorRules &rules);
 
-  // Return a laid-out version of the stick diagram.
-  Cell Inflate(const StickCell &stick_cell);
+  // Return a laid-out version of the poly_line diagram.
+  Cell Inflate(const PolyLineCell &poly_line_cell);
 
   void InflatePolyLine(const PolyLine &line, Polygon *polygon);
 
@@ -43,4 +43,4 @@ class StickInflator {
 
 }  // namespace boralago
 
-#endif  // STICK_INFLATOR_H_
+#endif  // POLY_LINE_INFLATOR_H_

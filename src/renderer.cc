@@ -16,7 +16,7 @@
 
 #include "cell.h"
 #include "point.h"
-#include "stick_cell.h"
+#include "poly_line_cell.h"
 
 namespace boralago {
 
@@ -53,14 +53,14 @@ const SkPaint &Renderer::GetLayerPaint(int64_t layer) {
   return paint_it->second;
 }
 
-void Renderer::DrawStickCell(const StickCell &stick_cell, SkCanvas *canvas) {
+void Renderer::DrawPolyLineCell(const PolyLineCell &poly_line_cell, SkCanvas *canvas) {
   //const SkScalar scale = 256.0f;
   //canvas->translate(0.5f * scale, 0.5f * scale);
-  for (const auto &stick : stick_cell.sticks()) {
-    const SkPaint &paint = GetLayerPaint(stick->layer()); 
+  for (const auto &poly_line : poly_line_cell.poly_lines()) {
+    const SkPaint &paint = GetLayerPaint(poly_line->layer()); 
     SkPath path;
-    path.moveTo(MapToSkPoint(stick->start()));
-    for (const auto &segment : stick->segments()) {
+    path.moveTo(MapToSkPoint(poly_line->start()));
+    for (const auto &segment : poly_line->segments()) {
       path.lineTo(MapToSkPoint(segment.end));
     }
     // path.close();
@@ -99,7 +99,7 @@ void Renderer::DrawCell(const Cell &cell, SkCanvas *canvas) {
 
 // HACK HACK HACK
 void Renderer::RenderToPNG(
-    const StickCell &stick_cell,
+    const PolyLineCell &poly_line_cell,
     const Cell &cell,
     const std::string &filename) {
   // This code from the Skia tutorial!
@@ -109,7 +109,7 @@ void Renderer::RenderToPNG(
 
   raster_canvas->clear(SK_ColorWHITE);
   raster_canvas->translate(200.0f, -200.0f);
-  DrawStickCell(stick_cell, raster_canvas);
+  DrawPolyLineCell(poly_line_cell, raster_canvas);
   DrawCell(cell, raster_canvas);
 
   sk_sp<SkImage> image(raster_surface->makeImageSnapshot());

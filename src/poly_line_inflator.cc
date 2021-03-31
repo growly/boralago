@@ -1,4 +1,4 @@
-#include "stick_inflator.h"
+#include "poly_line_inflator.h"
 
 #include <glog/logging.h>
 #include <cmath>
@@ -9,24 +9,24 @@
 #include "line.h"
 #include "poly_line.h"
 #include "polygon.h"
-#include "stick_cell.h"
+#include "poly_line_cell.h"
 #include "inflator_rules.pb.h"
 
 namespace boralago {
 
-StickInflator::StickInflator(const InflatorRules &rules) {
+PolyLineInflator::PolyLineInflator(const InflatorRules &rules) {
   for (const auto &rules : rules.layer_rules()) {
     LOG(INFO) << "LOL";
   }
 }
 
-Cell StickInflator::Inflate(const StickCell &stick_cell) {
+Cell PolyLineInflator::Inflate(const PolyLineCell &poly_line_cell) {
   Cell cell;
-  for (const auto &stick : stick_cell.sticks()) {
-    LOG_IF(FATAL, !stick) << "stick is nullptr?!";
+  for (const auto &poly_line : poly_line_cell.poly_lines()) {
+    LOG_IF(FATAL, !poly_line) << "poly_line is nullptr?!";
 
     Polygon polygon;
-    InflatePolyLine(*stick, &polygon);
+    InflatePolyLine(*poly_line, &polygon);
     auto bb = polygon.GetBoundingBox();
     LOG(INFO) << polygon << " bounded by ll= " << bb.first << " ur= " << bb.second;
     cell.AddPolygon(polygon);
@@ -34,7 +34,7 @@ Cell StickInflator::Inflate(const StickCell &stick_cell) {
   return cell;
 }
 
-// So, you could do this in one pass by inflating every central stick into its
+// So, you could do this in one pass by inflating every central poly_line into its
 // bounding lines, but that would create two problems when joining one segment
 // to its immediate neighbour:
 //                         1) deciding which two lines to intersect;
@@ -71,7 +71,7 @@ Cell StickInflator::Inflate(const StickCell &stick_cell) {
 // Because we determine the orientation by finding the vector's angle to the
 // horizon, we created a shifted copy of the vector in a consistent direction
 // relative to the vector's own bearing.
-void StickInflator::InflatePolyLine(const PolyLine &polyline, Polygon *polygon) {
+void PolyLineInflator::InflatePolyLine(const PolyLine &polyline, Polygon *polygon) {
   LOG_IF(FATAL, polyline.segments().empty()) << "Inflating empty PolyLine";
 
   std::vector<Line> line_stack;
@@ -153,7 +153,7 @@ void StickInflator::InflatePolyLine(const PolyLine &polyline, Polygon *polygon) 
   polygon->AddVertex(last_shifted_line->end());
 }
 
-Line *StickInflator::GenerateShiftedLine(
+Line *PolyLineInflator::GenerateShiftedLine(
     const Line &source, double width,
     double extension_source, double extension_end) {
   // TODO(aryap): Integer division can lead to precision loss here,

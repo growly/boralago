@@ -11,7 +11,7 @@
 
 #include "cell.h"
 #include "point.h"
-#include "stick_cell.h"
+#include "poly_line_cell.h"
 
 class SkCanvas;
 
@@ -25,12 +25,12 @@ class Renderer {
   }
 
   void RenderToPNG(
-      const StickCell &stick_cell,
+      const PolyLineCell &poly_line_cell,
       const Cell &cell,
       const std::string &filename);
 
  private:
-  void DrawStickCell(const StickCell &stick_cell, SkCanvas *canvas);
+  void DrawPolyLineCell(const PolyLineCell &poly_line_cell, SkCanvas *canvas);
 
   void DrawCell(const Cell &cell, SkCanvas *canvas);
 
