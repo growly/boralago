@@ -33,11 +33,12 @@ add_executable(boralago
                 src/cell.cc
                 src/line.cc
                 src/main.cc
-                src/stick_cell.cc
-                src/stick_inflator.cc
                 src/point.cc
                 src/poly_line.cc
+                src/polygon.cc
                 src/renderer.cc
+                src/stick_cell.cc
+                src/stick_inflator.cc
                 ${PROTO_SRCS}
                 ${PROTO_HDRS})
 

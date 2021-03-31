@@ -23,7 +23,6 @@ namespace boralago {
 SkPoint Renderer::MapToSkPoint(const Point &point) {
   // TODO(aryap): Probably some sort of scaling situation.
   SkScalar y = static_cast<SkScalar>(height_px_ - point.y());
-  LOG(INFO) << point << " becomes (" << point.x() << ", " << y  << ")";
   return SkPoint::Make(static_cast<SkScalar>(point.x()), y);
 }
 
