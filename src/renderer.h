@@ -32,9 +32,10 @@ class Renderer {
  private:
   void DrawPolyLineCell(const PolyLineCell &poly_line_cell, SkCanvas *canvas);
 
-  void DrawCell(const Cell &cell, SkCanvas *canvas);
+  void DrawCell(const Cell &cell, const Point &offset, SkCanvas *canvas);
 
   SkPoint MapToSkPoint(const Point &point);
+  SkPoint MapToSkPoint(const Point &point, const Point &offset);
   SkColor MapLayerToSkColor(int64_t layer);
   const SkPaint &GetLayerPaint(int64_t layer);
 

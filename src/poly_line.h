@@ -27,6 +27,12 @@ class PolyLine : public Shape {
   void set_start(const Point &start) { start_ = start; }
   const Point &start() const { return start_; }
 
+  uint64_t overhang_start() const { return overhang_start_; }
+  void set_overhang_start(uint64_t overhang) { overhang_start_ = overhang; }
+
+  uint64_t overhang_end() const { return overhang_end_; }
+  void set_overhang_end(uint64_t overhang) { overhang_end_ = overhang; }
+
   void AddSegment(const Point &point) {
     AddSegment(point, 0);
   }
@@ -37,6 +43,11 @@ class PolyLine : public Shape {
 
  private:
   Point start_;
+
+  // How much to extend the line over the start/end segments.
+  uint64_t overhang_start_;
+  uint64_t overhang_end_;
+
   std::vector<LineSegment> segments_;
 };
 

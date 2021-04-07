@@ -9,8 +9,8 @@ namespace boralago {
 
 const std::pair<Point, Point> PolyLine::GetBoundingBox() const {
   int64_t min_x = start_.x();
-  int64_t max_x = start_.y();
-  int64_t min_y = start_.x();
+  int64_t max_x = start_.x();
+  int64_t min_y = start_.y();
   int64_t max_y = start_.y();
 
   for (const auto &segment : segments_) {

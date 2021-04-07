@@ -38,6 +38,14 @@ class PolyLineInflator {
     return GenerateShiftedLine(source, width, 0.0, 0.0);
   }
 
+  // Shifts next_source by half of the given width, then add the intersection
+  // of the new line with *last_shifted_line to polygon. Returns the newly
+  // shifted line. If last_shifted_line is nullptr, the start of next_source is
+  // used.
+  std::unique_ptr<Line> ShiftAndAppendIntersection(
+    const Line &next_source, double width, Line *last_shifted_line,
+    Polygon *polygon);
+
   std::unordered_map<uint64_t, InflatorRules> rules_by_layer_;
 };
 

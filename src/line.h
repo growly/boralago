@@ -31,6 +31,11 @@ class Line {
   void ShiftStart(int64_t dx, int64_t dy);
   void ShiftEnd(int64_t dx, int64_t dy);
 
+  // Move the start/end points dl units in the direction of the line, away from
+  // the midpoint.
+  void StretchStart(int64_t dl);
+  void StretchEnd(int64_t dl);
+
   // Reverse the direction of this line.
   void Reverse() { std::swap(start_, end_); }
 

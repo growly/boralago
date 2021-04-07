@@ -67,6 +67,20 @@ Cell PolyLineInflator::Inflate(const PolyLineCell &poly_line_cell) {
 // keep track of the direction we're going in or reverse the start/end
 // positions to reverse the vector itself. In either case, we take care to
 // generate the shifted line in the same position relative to all vectors.
+// sin/cos will do this for us if we compute the angle the vector makes to the
+// positive x-axis correctly:
+//
+//        _ shifted vector      theta _________
+//        /| _                       /
+//       /   /| original vector     /   / 
+//      /   /                      /   /
+//     /   /                      /   /
+//    /   /                      /   /
+//   /   /                      /   / shifted vector
+//  /   /  theta            + |/_  /
+//     /_______             +    |/_ 
+//                          +
+//                        original vector, reversed
 //
 // Because we determine the orientation by finding the vector's angle to the
 // horizon, we created a shifted copy of the vector in a consistent direction
@@ -77,11 +91,25 @@ void PolyLineInflator::InflatePolyLine(const PolyLine &polyline, Polygon *polygo
   std::vector<Line> line_stack;
   std::unique_ptr<Line> last_shifted_line;
 
+  // Since the PolyLine only stores the next point in each segment, we keep
+  // track of the last one as we iterate through segments to create the lines
+  // defined by (start, end) pairs.
   Point start = polyline.start();
-  // Turn the segments into Lines, so we can deal with them.
-  for (const auto &segment : polyline.segments()) {
+
+  for (size_t i = 0; i < polyline.segments().size(); ++i) {
+    const LineSegment &segment = polyline.segments().at(i);
     line_stack.emplace_back(start, segment.end);
     Line &line = line_stack.back();
+
+    // Stretch the start of the start, or end of the end segments according to
+    // policy:
+    if (i == 0 && polyline.overhang_start() > 0) {
+      LOG(INFO) << "Computing pre-overhang";
+      line.StretchStart(polyline.overhang_start());
+    }
+    if (i == polyline.segments().size() - 1 && polyline.overhang_end() > 0) {
+      line.StretchEnd(polyline.overhang_end());
+    }
 
     // AnchorPosition growth_anchor;
 
@@ -99,23 +127,8 @@ void PolyLineInflator::InflatePolyLine(const PolyLine &polyline, Polygon *polygo
 
     double width = segment.width == 0 ? 100 : static_cast<double>(segment.width);
 
-    std::unique_ptr<Line> shifted_line(GenerateShiftedLine(line, width));
-    LOG(INFO) << "Shifted " << line << " to " << *shifted_line;
-
-    // Modify the last line we created to intersect with this new one.
-    if (last_shifted_line != nullptr) {
-      Point intersection;
-      if (!Line::Intersect(*last_shifted_line, *shifted_line, &intersection)) {
-        LOG(FATAL) << "The last line we created and the newly shifted line "
-                   << "never intersect: " << *last_shifted_line << " and "
-                   << *shifted_line;
-      }
-      polygon->AddVertex(intersection);
-    } else {
-      // Set the starting point.
-      polygon->AddVertex(shifted_line->start());
-    }
-    last_shifted_line = std::move(shifted_line);
+    last_shifted_line = std::move(
+        ShiftAndAppendIntersection(line, width, last_shifted_line.get(), polygon));
     start = segment.end;
   }
   polygon->AddVertex(last_shifted_line->end());
@@ -127,26 +140,15 @@ void PolyLineInflator::InflatePolyLine(const PolyLine &polyline, Polygon *polygo
     Line &line = line_stack.at(i);
     line.Reverse();
 
+    if (i == line_stack.size() - 1) {
+      polygon->AddVertex(line.start());
+    }
+
     const LineSegment &segment = polyline.segments().at(i);
     double width = segment.width == 0 ? 100 : static_cast<double>(segment.width);
 
-    std::unique_ptr<Line> shifted_line(GenerateShiftedLine(line, width));
-    LOG(INFO) << "Shifted " << line << " to " << *shifted_line;
-
-    if (last_shifted_line != nullptr) {
-      Point intersection;
-      if (!Line::Intersect(*last_shifted_line, *shifted_line, &intersection)) {
-        LOG(FATAL) << "The last line we created and the newly shifted line "
-                   << "never intersect: " << *last_shifted_line << " and "
-                   << *shifted_line;
-      }
-      polygon->AddVertex(intersection);
-    } else {
-      // Set the starting point.
-      polygon->AddVertex(shifted_line->start());
-    }
-
-    last_shifted_line = std::move(shifted_line);
+    last_shifted_line = std::move(
+        ShiftAndAppendIntersection(line, width, last_shifted_line.get(), polygon));
   }
   // We flipped all the lines on the way back, so the last point is the 'end'
   // position of the first line in the list.
@@ -184,6 +186,40 @@ Line *PolyLineInflator::GenerateShiftedLine(
     shifted_line->ShiftEnd(extension_x, extension_y);
   }
 
+  return shifted_line;
+}
+
+std::unique_ptr<Line> PolyLineInflator::ShiftAndAppendIntersection(
+    const Line &next_source, double width, Line *last_shifted_line,
+    Polygon *polygon) {
+
+  std::unique_ptr<Line> shifted_line(GenerateShiftedLine(next_source, width));
+  LOG(INFO) << "Shifted " << next_source << " to " << *shifted_line;
+  
+  if (last_shifted_line == nullptr) {
+    // Set the starting point.
+    polygon->AddVertex(shifted_line->start());
+    return shifted_line;
+  }
+
+  Point intersection;
+  if (Line::Intersect(*last_shifted_line, *shifted_line, &intersection)) {
+    polygon->AddVertex(intersection);
+  } else {
+    // The lines never intersect, which means they're parallel. That also means
+    // that we can simply insert the end of the last line and the start of the
+    // next line as additional vertices to join the widths of the two:
+    //
+    //          v start
+    //          +-----------+
+    //          | next ^    |
+    // ---------+           +----------
+    // last ^   ^ end
+    polygon->AddVertex(last_shifted_line->end());
+    polygon->AddVertex(shifted_line->start());
+  }
+  
+  // I'm expecting copy elision here.
   return shifted_line;
 }
 

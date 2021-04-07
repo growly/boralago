@@ -27,6 +27,9 @@ class Point {
 
 std::ostream &operator<<(std::ostream &os, const Point &point);
 
+// Treat the point as a vector from the origin, then add element-wise.
+Point operator+(const Point &lhs, const Point &rhs);
+
 }  // namespace boralago
 
 #endif  // POINT_H_

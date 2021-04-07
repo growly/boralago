@@ -12,6 +12,7 @@
 #include <core/SkStream.h>
 #include <core/SkSurface.h>
 #include <core/SkPath.h>
+#include <core/SkRect.h>
 #include <core/SkCanvas.h>
 
 #include "cell.h"
@@ -21,9 +22,17 @@
 namespace boralago {
 
 SkPoint Renderer::MapToSkPoint(const Point &point) {
+  return MapToSkPoint(point, Point(0, 0));
+}
+
+SkPoint Renderer::MapToSkPoint(const Point &point, const Point &offset) {
   // TODO(aryap): Probably some sort of scaling situation.
-  SkScalar y = static_cast<SkScalar>(height_px_ - point.y());
-  return SkPoint::Make(static_cast<SkScalar>(point.x()), y);
+  Point with_offset = point + offset;
+  SkScalar y = static_cast<SkScalar>(height_px_ - with_offset.y());
+  SkPoint mapped_point = SkPoint::Make(static_cast<SkScalar>(with_offset.x()), y);
+  LOG(INFO) << "Mapped " << point << " to (" << mapped_point.fX << ", " 
+            << mapped_point.fY << ")";
+  return mapped_point;
 }
 
 SkColor Renderer::MapLayerToSkColor(int64_t layer) {
@@ -68,16 +77,40 @@ void Renderer::DrawPolyLineCell(const PolyLineCell &poly_line_cell, SkCanvas *ca
   }
 }
 
-void Renderer::DrawCell(const Cell &cell, SkCanvas *canvas) {
+void Renderer::DrawCell(
+    const Cell &cell, const Point &offset, SkCanvas *canvas) {
+
   for (const auto &polygon : cell.polygons()) {
     const SkPaint &paint = GetLayerPaint(polygon.layer());
     SkPath path;
-    path.moveTo(MapToSkPoint(polygon.vertices().front()));
+    path.moveTo(MapToSkPoint(polygon.vertices().front(), offset));
     for (size_t i = 1; i < polygon.vertices().size(); ++i) {
-      path.lineTo(MapToSkPoint(polygon.vertices().at(i)));
+      path.lineTo(MapToSkPoint(polygon.vertices().at(i), offset));
     }
     path.close();
     canvas->drawPath(path, paint);
+  }
+
+  // Draw cell boundary.
+  std::pair<Point, Point> bounding_box = cell.GetBoundingBox();
+  SkPoint lower_left = MapToSkPoint(bounding_box.first, offset);
+  SkPoint upper_right = MapToSkPoint(bounding_box.second, offset);
+
+  SkPaint bounding_paint;
+  bounding_paint.setStyle(SkPaint::kStroke_Style);
+  bounding_paint.setColor(SkColors::kBlue);
+  SkRect bounding_rectangle = SkRect::MakeLTRB(
+      lower_left.x(),
+      upper_right.y(),
+      upper_right.x(),
+      lower_left.y());
+  LOG(INFO) << "Drawing bounding box for cell: "
+            << bounding_box.first << " " << bounding_box.second;
+  canvas->drawRect(bounding_rectangle, bounding_paint);
+
+  // Draw child cells.
+  for (const auto &instance : cell.instances()) {
+    DrawCell(*instance.template_cell(), instance.lower_left(), canvas);
   }
 }
 
@@ -110,7 +143,7 @@ void Renderer::RenderToPNG(
   raster_canvas->clear(SK_ColorWHITE);
   raster_canvas->translate(200.0f, -200.0f);
   DrawPolyLineCell(poly_line_cell, raster_canvas);
-  DrawCell(cell, raster_canvas);
+  DrawCell(cell, Point(0, 0), raster_canvas);
 
   sk_sp<SkImage> image(raster_surface->makeImageSnapshot());
   if (!image) { return; }

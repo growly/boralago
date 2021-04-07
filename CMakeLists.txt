@@ -36,6 +36,7 @@ add_executable(boralago
                 src/point.cc
                 src/poly_line.cc
                 src/polygon.cc
+                src/instance.cc
                 src/renderer.cc
                 src/poly_line_cell.cc
                 src/poly_line_inflator.cc

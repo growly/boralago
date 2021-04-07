@@ -9,4 +9,8 @@ std::ostream &operator<<(std::ostream &os, const Point &point) {
   return os;
 }
 
+Point operator+(const Point &lhs, const Point &rhs) {
+  return Point(lhs.x() + rhs.x(), lhs.y() + rhs.y());
+}
+
 }  // namespace boralago

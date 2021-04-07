@@ -15,13 +15,25 @@ bool Line::Intersect(const Line &lhs, const Line &rhs, Point *point) {
   // Set y's equal and solve for x:
   // xx = (c1 - c2)/(m2 - m1)
   // yy = m1*xx + c1
- 
-  if (lhs.end().x() == lhs.start().x()) {
-    // The left line is vertical.
-    if (rhs.end().x() == rhs.start().x()) {
-      // Both lines are vertical.
-      return false;
+
+  if (lhs.end().x() == lhs.start().x() && rhs.end().x() == rhs.start().x()) {
+    // Both lines are vertical. Check if they are at the same x:
+    if (lhs.start().x() == rhs.start().x()) {
+      // The intersection of these lines is each other, so we'll just return
+      // the point between their starts and ends:
+      double lhs_mid_y = (lhs.end().y() - lhs.start().y())/2.0 + lhs.start().y();
+      double rhs_mid_y = (rhs.end().y() - rhs.start().y())/2.0 + rhs.start().y();
+      double lhs_rhs_mid_y = (lhs_mid_y + rhs_mid_y) / 2.0;
+      *point = Point(lhs.start().x(), lhs_rhs_mid_y);
+      // TODO(aryap): This intersection point is arbitrary, so we can choose it
+      // to be something more useful or simply something faster (i.e. just take
+      // the end of the left-hand side).
+      return true;
     }
+    // Lines are vertical and parallel.
+    return false;
+  } else if (lhs.end().x() == lhs.start().x()) {
+    // The left line is vertical.
     double x = static_cast<double>(lhs.end().x());
     double y = rhs.Gradient() * x + rhs.Offset();
     LOG(INFO) << "lhs is vertical at x = " << x
@@ -64,7 +76,32 @@ bool Line::Intersect(const Line &lhs, const Line &rhs, Point *point) {
   return true;
 }
 
+//           _
+//           /|
+//          /
+//         / theta
+//        x------
+//    dl /|
+//      / | dy
+//     x'_+
+//       dx
+void Line::StretchStart(int64_t dl) {
+  double theta = AngleToHorizon();
+  double dx = static_cast<double>(dl) * std::cos(theta);
+  double dy = static_cast<double>(dl) * std::sin(theta);
+  LOG(INFO) << "theta = " << theta << ", dl = " << dl << ", dx = " << dx << ", dy = " << dy;
+  ShiftStart(-dx, -dy);
+}
+
+void Line::StretchEnd(int64_t dl) {
+  double theta = AngleToHorizon();
+  double dx = static_cast<double>(dl) * std::cos(theta);
+  double dy = static_cast<double>(dl) * std::sin(theta);
+  ShiftEnd(dx, dy);
+}
+
 void Line::ShiftStart(int64_t dx, int64_t dy) {
+  LOG(INFO) << " shifting by  " << dx << " " << dy;
   start_.set_x(start_.x() + dx);
   start_.set_y(start_.y() + dy);
 }
