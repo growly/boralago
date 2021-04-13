@@ -69,22 +69,20 @@ Cell PolyLineInflator::Inflate(const PolyLineCell &poly_line_cell) {
 // generate the shifted line in the same position relative to all vectors.
 // sin/cos will do this for us if we compute the angle the vector makes to the
 // positive x-axis correctly:
-//
-//        _ shifted vector      theta _________
-//        /| _                       /
+//                                   __
+//                                  /  \
+//        _ shifted vector      theta _|_______
+//        /| _                      \/
 //       /   /| original vector     /   / 
 //      /   /                      /   /
 //     /   /                      /   /
 //    /   /                      /   /
 //   /   /                      /   / shifted vector
-//  /   /  theta            + |/_  /
-//     /_______             +    |/_ 
+//  /   /\ theta            + |/_  /
+//     /_|_____             +    |/_ 
 //                          +
 //                        original vector, reversed
 //
-// Because we determine the orientation by finding the vector's angle to the
-// horizon, we created a shifted copy of the vector in a consistent direction
-// relative to the vector's own bearing.
 void PolyLineInflator::InflatePolyLine(const PolyLine &polyline, Polygon *polygon) {
   LOG_IF(FATAL, polyline.segments().empty()) << "Inflating empty PolyLine";
 
@@ -159,7 +157,7 @@ Line *PolyLineInflator::GenerateShiftedLine(
     const Line &source, double width,
     double extension_source, double extension_end) {
   // TODO(aryap): Integer division can lead to precision loss here,
-  // so we make sure we recover it.
+  // so we *should* make sure we recover it.
   double half_width = static_cast<double>(width) / 2.0;
 
   double theta = source.AngleToHorizon();

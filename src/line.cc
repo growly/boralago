@@ -62,7 +62,7 @@ bool Line::Intersect(const Line &lhs, const Line &rhs, Point *point) {
   LOG(INFO) << rhs.start() << " -> " << rhs.end()
             << ": y2 = " << m2 << "*x2 + " << c2;
 
-  // TODO(aryap): What if two overlapping vertical lines are intersected?
+  // TODO(aryap): What if two overlapping horizontal lines are intersected?
 
   if (m1 == m2) {
     // Line are parallel.

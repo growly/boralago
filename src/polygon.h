@@ -2,6 +2,7 @@
 #define POLYGON_H_
 
 #include <glog/logging.h>
+#include <ostream>
 #include <vector>
 
 #include "point.h"

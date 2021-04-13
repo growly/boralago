@@ -38,8 +38,10 @@ add_executable(boralago
                 src/polygon.cc
                 src/instance.cc
                 src/renderer.cc
+                src/rectangle.cc
                 src/poly_line_cell.cc
                 src/poly_line_inflator.cc
+                src/routing_grid.cc
                 ${PROTO_SRCS}
                 ${PROTO_HDRS})
 

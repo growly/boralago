@@ -4,6 +4,7 @@
 #include <string>
 #include <utility>
 
+#include "layer.h"
 #include "point.h"
 
 namespace boralago {
@@ -13,7 +14,7 @@ class Shape {
   Shape() = default;
   virtual ~Shape() = default;
 
-  Shape(const int64_t layer, const std::string &net)
+  Shape(const Layer &layer, const std::string &net)
       : layer_(layer),
         net_(net) {}
 
@@ -21,14 +22,14 @@ class Shape {
   // around this shape.
   virtual const std::pair<Point, Point> GetBoundingBox() const = 0;
 
-  void set_layer(const int64_t layer) { layer_ = layer; }
-  int64_t layer() const { return layer_; }
+  void set_layer(const Layer &layer) { layer_ = layer; }
+  const Layer &layer() const { return layer_; }
 
   void set_net(const std::string &net) { net_ = net; }
   const std::string &net() { return net_; }
 
  private:
-  int64_t layer_;
+  Layer layer_;
   std::string net_;
 };
 
