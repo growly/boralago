@@ -31,6 +31,12 @@ class Port : public Shape {
     return std::make_pair(lower_left_, upper_right_);
   }
 
+  // TODO(aryap): Hmmm. Not a double. Truncating. Hmmm.
+  Point centre() const {
+    return Point((lower_left_.x() + upper_right_.x()) / 2,
+                 (lower_left_.y() + upper_right_.y()) / 2);
+  }
+
  private:
   Point lower_left_;
   Point upper_right_;

@@ -14,6 +14,7 @@ namespace boralago {
 // laziness...
 class Rectangle : public Shape {
  public:
+  Rectangle() : Shape(0, "") {}
   Rectangle(const Point &lower_left, uint64_t width, uint64_t height)
       : lower_left_(lower_left),
         upper_right_(lower_left + Point(width, height)),

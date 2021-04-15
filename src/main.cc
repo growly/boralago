@@ -12,7 +12,9 @@
 
 #include "c_make_header.h"
 
+#include "routing_grid.h"
 #include "renderer.h"
+#include "rectangle.h"
 #include "instance.h"
 #include "poly_line_cell.h"
 #include "poly_line_inflator.h"
@@ -56,6 +58,33 @@ int main(int argc, char **argv) {
   boralago::Cell top;
   top.AddInstance(boralago::Instance{&cell, boralago::Point(0, 0)});
   top.AddInstance(boralago::Instance{&cell, boralago::Point(100, 100)});
+
+
+  // Create a routing grid.
+  boralago::RoutingLayerInfo layer_1;
+  layer_1.layer = 1;
+  layer_1.area = boralago::Rectangle(boralago::Point(0, 0), 1000, 1000);
+  layer_1.wire_width = 50;
+  layer_1.offset = 100;
+  layer_1.pitch = 200;
+  layer_1.direction = boralago::RoutingTrackDirection::kTrackVertical;
+
+  boralago::RoutingLayerInfo layer_2;
+  layer_2.layer = 2;
+  layer_2.area = boralago::Rectangle(boralago::Point(0, 0), 1000, 1000);
+  layer_2.wire_width = 50;
+  layer_2.offset = 100;
+  layer_2.pitch = 200;
+  layer_2.direction = boralago::RoutingTrackDirection::kTrackHorizontal;
+
+  boralago::RoutingGrid grid;
+  grid.DescribeLayer(layer_1);
+  grid.DescribeLayer(layer_2);
+
+  boralago::LayerConnectionInfo layer_1_2;
+  layer_1_2.cost = 1.0;
+  grid.ConnectLayers(layer_1.layer, layer_2.layer, layer_1_2);
+
 
   boralago::Renderer renderer(1024, 1024);
   renderer.RenderToPNG(inverter, top, "test.png");
