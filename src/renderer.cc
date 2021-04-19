@@ -30,8 +30,8 @@ SkPoint Renderer::MapToSkPoint(const Point &point, const Point &offset) {
   Point with_offset = point + offset;
   SkScalar y = static_cast<SkScalar>(height_px_ - with_offset.y());
   SkPoint mapped_point = SkPoint::Make(static_cast<SkScalar>(with_offset.x()), y);
-  LOG(INFO) << "Mapped " << point << " to (" << mapped_point.fX << ", " 
-            << mapped_point.fY << ")";
+  VLOG(10) << "Mapped " << point << " to (" << mapped_point.fX << ", " 
+           << mapped_point.fY << ")";
   return mapped_point;
 }
 
@@ -50,7 +50,7 @@ SkColor Renderer::MapLayerToSkColor(int64_t layer) {
 const SkPaint &Renderer::GetLayerPaint(int64_t layer) {
   auto paint_it = paint_by_layer_.find(layer);
   if (paint_it == paint_by_layer_.end()) {
-    LOG(INFO) << "Creating new paint";
+    VLOG(10) << "Creating new paint";
     SkPaint p;
     p.setStyle(SkPaint::kStroke_Style);
     p.setColor(MapLayerToSkColor(layer));
@@ -77,9 +77,35 @@ void Renderer::DrawPolyLineCell(const PolyLineCell &poly_line_cell, SkCanvas *ca
   }
 }
 
+void Renderer::DrawPoint(
+    const Point &point, uint64_t width, uint64_t height,
+    const SkPaint &up_paint, const SkPaint &down_paint, SkCanvas *canvas) {
+  SkPoint lower_left(
+      MapToSkPoint(
+          Point(point.x() - width / 2,
+                point.y() - height / 2)));
+  SkPoint upper_right(
+      MapToSkPoint(
+          Point(point.x() + width / 2,
+                point.y() + height / 2)));
+  SkPoint upper_left = SkPoint::Make(lower_left.x(), upper_right.y());
+  SkPoint lower_right = SkPoint::Make(upper_right.x(), lower_left.y());
+  canvas->drawLine(lower_left, upper_right, up_paint);
+  canvas->drawLine(upper_left, lower_right, down_paint);
+}
+
+// This is actually the same as drawing a rectangle.
+void Renderer::DrawPort(const Port &port, SkCanvas *canvas) {
+  SkPoint lower_left = MapToSkPoint(port.lower_left());
+  SkPoint upper_right = MapToSkPoint(port.upper_right());
+  SkRect rectangle = SkRect::MakeLTRB(
+      lower_left.x(), upper_right.y(), upper_right.x(), lower_left.y());
+  const SkPaint &paint = GetLayerPaint(port.layer());
+  canvas->drawRect(rectangle, paint);
+}
+
 void Renderer::DrawCell(
     const Cell &cell, const Point &offset, SkCanvas *canvas) {
-
   for (const auto &polygon : cell.polygons()) {
     const SkPaint &paint = GetLayerPaint(polygon.layer());
     SkPath path;
@@ -114,6 +140,53 @@ void Renderer::DrawCell(
   }
 }
 
+void Renderer::DrawRoutingGrid(
+    const RoutingGrid &grid, SkCanvas *canvas) {
+  static const double kVertexWidth = 25;
+  static const double kVertexHeight = 25;
+
+  // Draw vertices.
+  LOG(INFO) << "Grid has " << grid.vertices().size() << " vertices.";
+  for (RoutingVertex *vertex : grid.vertices()) {
+    if (vertex->connected_layers().size() < 2) {
+      LOG(WARNING) << "Vertex has " << vertex->connected_layers().size()
+                   << " connected layers: " << vertex;
+      continue;
+    }
+    VLOG(10) << "Drawing vertex " << vertex << " at " << vertex->centre();
+
+    const SkPaint &first_paint = GetLayerPaint(
+        vertex->connected_layers()[0]);
+    const SkPaint &second_paint = GetLayerPaint(
+        vertex->connected_layers()[1]);
+
+    // Draw a cross through the centre.
+    DrawPoint(vertex->centre(), kVertexWidth, kVertexHeight,
+              first_paint, second_paint, canvas);
+  }
+
+  // Draw paths.
+  LOG(INFO) << "Grid has " << grid.paths().size() << " paths.";
+  for (RoutingPath *path : grid.paths()) {
+    if (path->Empty()) {
+      LOG(WARNING) << "Path is empty: " << path;
+    }
+    SkPath sk_path;
+    sk_path.moveTo(MapToSkPoint(path->begin()->centre()));
+
+    for (RoutingEdge *edge : path->edges()) {
+      sk_path.lineTo(MapToSkPoint(edge->second()->centre()));
+    }
+
+    // TODO(aryap): Actually you want each edge to have its layer colour...
+    SkPaint path_paint;
+    path_paint.setStyle(SkPaint::kStroke_Style);
+    path_paint.setColor(SkColors::kRed);
+
+    canvas->drawPath(sk_path, path_paint);
+  }
+}
+
 // void raster(int width, int height,
 //             void (*draw)(SkCanvas*),
 //             const char* path) {
@@ -134,6 +207,7 @@ void Renderer::DrawCell(
 void Renderer::RenderToPNG(
     const PolyLineCell &poly_line_cell,
     const Cell &cell,
+    const RoutingGrid &grid,
     const std::string &filename) {
   // This code from the Skia tutorial!
   sk_sp<SkSurface> raster_surface =
@@ -144,6 +218,7 @@ void Renderer::RenderToPNG(
   raster_canvas->translate(200.0f, -200.0f);
   DrawPolyLineCell(poly_line_cell, raster_canvas);
   DrawCell(cell, Point(0, 0), raster_canvas);
+  DrawRoutingGrid(grid, raster_canvas);
 
   sk_sp<SkImage> image(raster_surface->makeImageSnapshot());
   if (!image) { return; }

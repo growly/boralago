@@ -37,6 +37,9 @@ class Port : public Shape {
                  (lower_left_.y() + upper_right_.y()) / 2);
   }
 
+  const Point &lower_left() const { return lower_left_; }
+  const Point &upper_right() const { return upper_right_; }
+
  private:
   Point lower_left_;
   Point upper_right_;

@@ -11,7 +11,9 @@
 
 #include "cell.h"
 #include "point.h"
+#include "port.h"
 #include "poly_line_cell.h"
+#include "routing_grid.h"
 
 class SkCanvas;
 
@@ -27,11 +29,16 @@ class Renderer {
   void RenderToPNG(
       const PolyLineCell &poly_line_cell,
       const Cell &cell,
+      const RoutingGrid &grid,
       const std::string &filename);
 
  private:
   void DrawPolyLineCell(const PolyLineCell &poly_line_cell, SkCanvas *canvas);
-
+  void DrawPoint(
+      const Point &point, uint64_t width, uint64_t height,
+      const SkPaint &up_paint, const SkPaint &down_paint, SkCanvas *canvas);
+  void DrawPort(const Port &port, SkCanvas *canvas);
+  void DrawRoutingGrid(const RoutingGrid &grid, SkCanvas *canvas);
   void DrawCell(const Cell &cell, const Point &offset, SkCanvas *canvas);
 
   SkPoint MapToSkPoint(const Point &point);

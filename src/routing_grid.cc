@@ -8,7 +8,9 @@
 #include <limits>
 #include <map>
 #include <vector>
+#include <utility>
 
+#include <absl/strings/str_join.h>
 #include <glog/logging.h>
 
 #include "routing_grid.h"
@@ -90,6 +92,7 @@ RoutingVertex *RoutingGrid::FindNearestAvailableVertex(
   std::vector<std::pair<uint64_t, RoutingVertex*>> costed_vertices;
   for (RoutingVertex *vertex : it->second) {
     uint64_t vertex_cost = vertex->L1DistanceTo(point);
+    costed_vertices.emplace_back(vertex_cost, vertex);
   }
 
   // Should sort automatically based on operator< for first and second entries
@@ -112,6 +115,21 @@ std::vector<RoutingVertex*> &RoutingGrid::GetAvailableVertices(
   // Gotta dereference the iterator to get to the goods!
   return it->second;
 }
+
+namespace {
+
+// C++ modulo is more 'remainder' than 'modulo' because of how negative numbers
+// are handled:
+//    mod(-3, 5) = 2
+//    rem(-3, 5) = -3 (since -3 / 5 = 0)
+// So we have to do this:
+int64_t modulo(int64_t a, int64_t b) {
+  int64_t remainder = a % b;
+  return remainder < 0? remainder + b : remainder;
+}
+
+
+}   // namespace
 
 // TODO(aryap): Do we need to protect against "connect"ing the same layers
 // multiple times?
@@ -139,13 +157,13 @@ void RoutingGrid::ConnectLayers(
   int64_t x_offset = horizontal_info->offset;
   int64_t x_pitch = horizontal_info->pitch;
   int64_t x_min = overlap.lower_left().x();
-  int64_t x_start = x_min + (x_pitch - ((x_min - x_offset) % x_pitch));
+  int64_t x_start = x_min + (x_pitch - modulo(x_min - x_offset, x_pitch));
   int64_t x_max = overlap.upper_right().x();
-
+  
   int64_t y_offset = vertical_info->offset;
   int64_t y_pitch = vertical_info->pitch;
   int64_t y_min = overlap.lower_left().y();
-  int64_t y_start = y_min + (y_pitch - ((y_min - y_offset) % y_pitch));
+  int64_t y_start = y_min + (y_pitch - modulo(y_min - y_offset, y_pitch));
   int64_t y_max = overlap.upper_right().y();
 
   std::vector<std::vector<RoutingVertex*>> vertex_by_ordinal;
@@ -165,7 +183,11 @@ void RoutingGrid::ConnectLayers(
       vertices_.push_back(vertex);  // The class owns all of these.
       ++num_vertices;
       vertex->AddConnectedLayer(first);
+      first_layer_vertices.push_back(vertex);
       vertex->AddConnectedLayer(second);
+      second_layer_vertices.push_back(vertex);
+      LOG(INFO) << "Vertex created: " << vertex->centre() << " on layers: "
+                << absl::StrJoin(vertex->connected_layers(), ", ");
       y_vertices.push_back(vertex);
     }
   }
@@ -226,7 +248,13 @@ bool RoutingGrid::AddRouteBetween(
   std::unique_ptr<RoutingPath> shortest_path(
       ShortestPath(begin_vertex, end_vertex));
 
-  return shortest_path.get() != nullptr;
+  if (!shortest_path) {
+    LOG(WARNING) << "No path found.";
+    return false;
+  }
+
+  paths_.push_back(shortest_path.release());
+  return true;
 }
 
 RoutingPath *RoutingGrid::ShortestPath(

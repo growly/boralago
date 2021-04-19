@@ -59,22 +59,21 @@ int main(int argc, char **argv) {
   top.AddInstance(boralago::Instance{&cell, boralago::Point(0, 0)});
   top.AddInstance(boralago::Instance{&cell, boralago::Point(100, 100)});
 
-
   // Create a routing grid.
   boralago::RoutingLayerInfo layer_1;
   layer_1.layer = 1;
   layer_1.area = boralago::Rectangle(boralago::Point(0, 0), 1000, 1000);
   layer_1.wire_width = 50;
-  layer_1.offset = 100;
-  layer_1.pitch = 200;
+  layer_1.offset = 50;
+  layer_1.pitch = 100;
   layer_1.direction = boralago::RoutingTrackDirection::kTrackVertical;
 
   boralago::RoutingLayerInfo layer_2;
   layer_2.layer = 2;
   layer_2.area = boralago::Rectangle(boralago::Point(0, 0), 1000, 1000);
   layer_2.wire_width = 50;
-  layer_2.offset = 100;
-  layer_2.pitch = 200;
+  layer_2.offset = 50;
+  layer_2.pitch = 100;
   layer_2.direction = boralago::RoutingTrackDirection::kTrackHorizontal;
 
   boralago::RoutingGrid grid;
@@ -86,8 +85,13 @@ int main(int argc, char **argv) {
   grid.ConnectLayers(layer_1.layer, layer_2.layer, layer_1_2);
 
 
-  boralago::Renderer renderer(1024, 1024);
-  renderer.RenderToPNG(inverter, top, "test.png");
+  // Make up ports for test.
+  boralago::Port a(boralago::Point(75, 75), 50, 50, 1, "VDD");
+  boralago::Port b(boralago::Point(465, 465), 50, 50, 2, "VDD");
+  grid.AddRouteBetween(a, b);
+
+  boralago::Renderer renderer(2048, 2048);
+  renderer.RenderToPNG(inverter, top, grid, "test.png");
 
   return EXIT_SUCCESS;
 }

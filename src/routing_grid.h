@@ -34,6 +34,9 @@ class RoutingVertex {
 
   uint64_t L1DistanceTo(const Point &point);
 
+  // This is the cost of connecting through this vertex (i.e. a via).
+  double cost() const { return 1.0; }
+
   void AddConnectedLayer(const Layer &layer) {
     connected_layers_.push_back(layer);
   }
@@ -44,8 +47,7 @@ class RoutingVertex {
 
   const std::vector<RoutingEdge*> edges() const { return edges_; }
 
-  // This is the const of connecting through this vertex (i.e. a via).
-  double cost() const { return 1.0; }
+  const Point &centre() const { return centre_; }
 
  private:
   // This is a minor optimisation to avoid having to key things by pointer.
@@ -90,7 +92,11 @@ class RoutingPath {
     return Empty() ? nullptr : edges_.back()->second();
   }
 
+  //PolyLineCell *AsPolyLineCell() const;
+
   bool Empty() const { return edges_.empty(); }
+
+  const std::vector<RoutingEdge*> edges() const { return edges_; }
 
  private:
   // The list of edges. Edge i connected vertices_[j] and vertices_[j+1].
@@ -120,6 +126,13 @@ struct LayerConnectionInfo {
 
 class RoutingGrid {
  public:
+
+  ~RoutingGrid() {
+    for (RoutingPath *path : paths_) { delete path; }
+    for (RoutingEdge *edge : edges_) { delete edge; }
+    for (RoutingVertex *vertex : vertices_) { delete vertex; }
+  }
+
   // Stage the description of a layer that's usable for routing.
   void DescribeLayer(const RoutingLayerInfo &info);
 
@@ -132,6 +145,10 @@ class RoutingGrid {
 
   bool AddRouteBetween(
       const Port &begin, const Port &end);
+
+  const std::vector<RoutingPath*> &paths() const { return paths_; }
+  const std::vector<RoutingEdge*> &edges() const { return edges_; }
+  const std::vector<RoutingVertex*> &vertices() const { return vertices_; }
 
  private:
   RoutingLayerInfo *FindRoutingInfoOrDie(const Layer &layer);
@@ -148,6 +165,9 @@ class RoutingGrid {
   // now owns the object.
   RoutingPath *ShortestPath(
       RoutingVertex *begin, RoutingVertex *end);
+
+  // All installed paths (which we also own).
+  std::vector<RoutingPath*> paths_;
 
   // The list of all owned edges.
   std::vector<RoutingEdge*> edges_;
