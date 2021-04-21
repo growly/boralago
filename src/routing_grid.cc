@@ -1,3 +1,4 @@
+#include <ostream>
 #include <algorithm>
 #include <utility>
 #include <cmath>
@@ -17,6 +18,199 @@
 #include "rectangle.h"
 
 namespace boralago {
+
+bool RoutingTrackBlockage::Contains(int64_t position) {
+  return position >= start_ && position <= end_;
+}
+
+bool RoutingTrackBlockage::IsAfter(int64_t position) {
+  return position <= start_;
+}
+
+bool RoutingTrackBlockage::IsBefore(int64_t position) {
+  return position >= end_;
+}
+
+// Whether the given span [low, high] overlaps with this blockage.
+bool RoutingTrackBlockage::Blocks(int64_t low, int64_t high) {
+  return Contains(low) || Contains(high) || (low <= start_ && high >= end_);
+}
+
+void RoutingTrack::AddEdge(RoutingEdge *edge) {
+  edges_.insert(edge);
+}
+
+void RoutingTrack::AddVertex(RoutingVertex *vertex) {
+  LOG_IF(FATAL, IsBlocked(vertex->centre()))
+      << "RoutingTrack cannot add vertex at " << vertex->centre()
+      << ", it is blocked";
+
+  //if (usable_blockages_.empty()) {
+  //  start_ = ProjectOntoTrack(vertex->centre());
+  //  end_ = start_;
+  //  usables_blockages_.
+  //} else {
+  //  int64_t vertex_offset = ProjectOntoTrack(vertex->centre());
+  //  start_ = std::min(start_, vertex_offset);
+  //  end_ = std::max(end_, vertex_offset);
+  //}
+  vertices_.insert(vertex);
+}
+
+void RoutingTrack::MarkEdgeAsUsed(RoutingEdge *edge) {
+  // Edge must be known.
+  LOG_IF(FATAL, edges_.find(edge) == edges_.end())
+      << "Edge " << edge << " is unknown to RoutingTrack " << *this;
+
+  MergeBlockage(edge->first()->centre(), edge->second()->centre());
+
+
+}
+
+void RoutingTrack::ReportAvailableEdges(
+    std::vector<RoutingEdge*> *edges_out) {
+  std::copy_if(
+      edges_.begin(),
+      edges_.end(),
+      edges_out->begin(),
+      [](RoutingEdge* edge) { return edge->available(); });
+}
+
+void RoutingTrack::ReportAvailableVertices(
+    std::vector<RoutingVertex*> *vertices_out) {
+  std::copy_if(
+      vertices_.begin(),
+      vertices_.end(),
+      vertices_out->begin(),
+      [](RoutingVertex* vertex) { return vertex->available(); });
+}
+
+std::string RoutingTrack::Debug() const {
+  std::stringstream ss;
+  switch (direction_) {
+    case RoutingTrackDirection::kTrackHorizontal:
+      ss << "horizontal";
+      break;
+    case RoutingTrackDirection::kTrackVertical:
+      ss << "vertical";
+      break;
+    default:
+      ss << "unknown direction";
+      break;
+  }
+  ss << " routing track offset=" << offset_
+     //<< " start=" << start_
+     //<< " end=" << end_
+     << " #edges=" << edges_.size() << " #vertices="
+     << vertices_.size();
+  return ss.str();
+}
+
+bool RoutingTrack::IsBlocked(
+    const Point &low_point, const Point &high_point) const {
+  int64_t low = ProjectOntoTrack(low_point);
+  int64_t high = ProjectOntoTrack(high_point);
+  for (RoutingTrackBlockage *blockage : blockages_) {
+    if (blockage->Blocks(low, high)) return true;
+  }
+  // Does not overlap, start or stop in any blockages.
+  return false;
+}
+
+int64_t RoutingTrack::ProjectOntoTrack(const Point &point) const {
+  switch (direction_) {
+    case RoutingTrackDirection::kTrackHorizontal:
+      return point.x();
+    case RoutingTrackDirection::kTrackVertical:
+      return point.y();
+    default:
+      LOG(FATAL) << "This RoutingTrack has an unrecognised "
+                 << "RoutingTrackDirection: " << direction_;
+  }
+  return 0;
+}
+
+// Spans extend existing spans of the same type. We assume there there can only
+// be overlaps of blockages onto usable sections, but not of usable sections
+// onto blockages.
+void RoutingTrack::MergeBlockage(
+      const Point &low_point, const Point &high_point) {
+  int64_t low = ProjectOntoTrack(low_point);
+  int64_t high = ProjectOntoTrack(high_point);
+
+  if (blockages_.empty()) {
+    blockages_.push_back(new RoutingTrackBlockage(low, high));
+    // Already sorted!
+    return;
+  }
+  // RoutingTrackBlockages should already be sorted in ascending order of
+  // position.
+  //
+  // TODO(aryap): I'm trying to find a range of consecutive values for which
+  // some predicate is true. I can't find a helpful standard library
+  // implementation that isn't just storing a bunch of iterators returned by
+  // subsequent calls to std::find_if. But since we need an iterator to remove
+  // elements from a vector, we have to store an iterator anyway.
+  auto first = blockages_.end();
+  auto last = blockages_.end();
+  for (auto it = blockages_.begin(); it != blockages_.end(); ++it) {
+    RoutingTrackBlockage *blockage = *it;
+    if (blockage->Blocks(low, high)) {
+      if (first == blockages_.end())
+        first = it;
+      else
+        last = it;
+    }
+  }
+
+  if (first == blockages_.end()) {
+    // If no blockages were spanned the new blockage stands alone.
+    RoutingTrackBlockage *blockage = new RoutingTrackBlockage(low, high);
+    blockages_.push_back(blockage);
+    SortBlockages();
+    return;
+  }
+
+  if (last == blockages_.end()) {
+    last = first;
+  }
+
+  // Remove elements [first, last] from blockages after combining them into one
+  // blockage spanned by the new one. We rely on the sorted order of the blockages.
+  RoutingTrackBlockage *blockage = new RoutingTrackBlockage(
+      std::min(low, (*first)->start()),
+      std::max(high, (*last)->end()));
+
+  // Delete the old elements
+  ++last;
+  for (auto it = first; it != last; ++it)
+    delete *it;
+  blockages_.erase(first, last);
+
+  blockages_.push_back(blockage);
+  SortBlockages();
+}
+
+void RoutingTrack::SortBlockages() {
+  // Instead of declaring some
+  //   static bool CompareAsLess(
+  //       const RoutingTrackBlockage &a, const RoutingTrackBlockage &b) { ... };
+  // and passing &CompareAsLess with type
+  //       bool (*)(const RoutingTrackBlockage&, const RoutingTrackBlockage&)
+  // we get to use mOdErN c++. TODO(aryap): But if we made this a class member
+  // we wouldn't have to indirect through the getters/setters.
+  static auto comp = [](RoutingTrackBlockage *lhs,
+                        RoutingTrackBlockage *rhs) {
+    return lhs->start() != rhs->start() ?
+        lhs->start() < rhs->start() : lhs->end() < rhs->end();
+  };
+  std::sort(blockages_.begin(), blockages_.end(), comp);
+}
+
+std::ostream &operator<<(std::ostream &os, const RoutingTrack &track) {
+  os << track.Debug();
+  return os;
+}
 
 uint64_t RoutingVertex::L1DistanceTo(const Point &point) {
   // The L-1 norm, or Manhattan distance.
@@ -175,29 +369,66 @@ void RoutingGrid::ConnectLayers(
   size_t num_edges = 0;
   size_t num_vertices = 0;
 
+  std::map<int64_t, RoutingTrack*> vertical_tracks;
+  std::map<int64_t, RoutingTrack*> horizontal_tracks;
+
+  // Generate tracks to hold edges and vertices in each direction.
+  for (int64_t x = x_start; x < x_max; x += x_pitch) {
+    RoutingTrack *track = new RoutingTrack(
+        vertical_info->layer, RoutingTrackDirection::kTrackVertical, x);
+    vertical_tracks.insert({x, track});
+    AddTrackToLayer(track, vertical_info->layer);
+  }
+
+  for (int64_t y = y_start; y < y_max; y += y_pitch) {
+    RoutingTrack *track = new RoutingTrack(
+        horizontal_info->layer, RoutingTrackDirection::kTrackHorizontal, y);
+    horizontal_tracks.insert({y, track});
+    AddTrackToLayer(track, horizontal_info->layer);
+  }
+
+  // Generate a vertex at the intersection of every horizontal and vertical
+  // track.
   for (int64_t x = x_start; x < x_max; x += x_pitch) {
     vertex_by_ordinal.push_back({});
     std::vector<RoutingVertex*> &y_vertices = vertex_by_ordinal.back();
+
+    // This (and the horizontal one) must exist by now, so we can make this
+    // fatal.
+    RoutingTrack *vertical_track = vertical_tracks.find(x)->second;
+
     for (int64_t y = y_start; y < y_max; y += y_pitch) {
+      RoutingTrack *horizontal_track = horizontal_tracks.find(y)->second;
+
       RoutingVertex *vertex = new RoutingVertex(Point(x, y));
+      vertex->set_horizontal_track(horizontal_track);
+      vertex->set_vertical_track(vertical_track);
+
       vertices_.push_back(vertex);  // The class owns all of these.
+      horizontal_track->AddVertex(vertex);
+      vertical_track->AddVertex(vertex);
+
       ++num_vertices;
       vertex->AddConnectedLayer(first);
       first_layer_vertices.push_back(vertex);
       vertex->AddConnectedLayer(second);
       second_layer_vertices.push_back(vertex);
-      LOG(INFO) << "Vertex created: " << vertex->centre() << " on layers: "
-                << absl::StrJoin(vertex->connected_layers(), ", ");
+      VLOG(10) << "Vertex created: " << vertex->centre() << " on layers: "
+               << absl::StrJoin(vertex->connected_layers(), ", ");
       y_vertices.push_back(vertex);
     }
   }
 
+  // Generate edges.
   for (size_t i = 0; i < vertex_by_ordinal.size(); ++i) {
     // The vertices in our column, for a given x (given by i).
     std::vector<RoutingVertex*> &y_vertices = vertex_by_ordinal[i];
+
     for (size_t j = 0; j < y_vertices.size(); ++j) {
       // Ever vertex gets an edge to every other vertex in its row and column.
       RoutingVertex *current = y_vertices[j];
+
+      RoutingTrack *vertical_track = current->vertical_track();
 
       // Enumerate all the other vertices in this column. Start at j + 1 to
       // avoid duplicating edges. (Vertices below should already have created
@@ -210,7 +441,11 @@ void RoutingGrid::ConnectLayers(
         edges_.push_back(edge);  // The class owns all of these.
         current->AddEdge(edge);
         other->AddEdge(edge);
+        edge->set_track(vertical_track);
+        vertical_track->AddEdge(edge);
       }
+
+      RoutingTrack *horizontal_track = current->horizontal_track();
 
       // Enumerate all the other vertices in this row. Again, start at i + 1 to
       // avoid duplicating edges.
@@ -221,13 +456,24 @@ void RoutingGrid::ConnectLayers(
         edges_.push_back(edge);  // The class owns all of these.
         current->AddEdge(edge);
         other->AddEdge(edge);
+        edge->set_track(horizontal_track);
+        horizontal_track->AddEdge(edge);
       }
     }
   }
 
   LOG(INFO) << "Connected layer " << first << " and " << second << "; "
-            << "generated " << num_vertices << " vertices and "
+            << "generated " << horizontal_tracks.size() << " horizontal and "
+            << vertical_tracks.size() << " vertical tracks, "
+            << num_vertices << " vertices and "
             << num_edges << " edges.";
+
+  for (auto entry : tracks_by_layer_) {
+    const Layer &layer = entry.first;
+    for (RoutingTrack *track : entry.second) {
+      LOG(INFO) << layer << " track: " << *track;
+    }
+  }
 }
 
 bool RoutingGrid::AddRouteBetween(
@@ -253,8 +499,16 @@ bool RoutingGrid::AddRouteBetween(
     return false;
   }
 
-  paths_.push_back(shortest_path.release());
+  InstallPath(shortest_path.release());
   return true;
+}
+
+void RoutingGrid::InstallPath(RoutingPath *path) {
+  for (RoutingEdge *edge : path->edges()) {
+    edge->track()->MarkEdgeAsUsed(edge);
+  }
+  
+  paths_.push_back(path);
 }
 
 RoutingPath *RoutingGrid::ShortestPath(
@@ -357,6 +611,16 @@ RoutingPath *RoutingGrid::ShortestPath(
 
   RoutingPath *path = new RoutingPath(shortest_edges);
   return path;
+}
+
+void RoutingGrid::AddTrackToLayer(RoutingTrack *track, const Layer &layer) {
+  // Create the first vector of tracks.
+  auto it = tracks_by_layer_.find(layer);
+  if (it == tracks_by_layer_.end()) {
+    tracks_by_layer_.insert({layer, {track}});
+    return;
+  }
+  it->second.push_back(track);
 }
 
 } // namespace boralago

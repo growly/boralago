@@ -7,27 +7,18 @@
 #include "rectangle.h"
 
 #include <map>
+#include <set>
 #include <deque>
 #include <vector>
 
 namespace boralago {
 
 class RoutingEdge;
-
-// Need a way to invalidate all edges sharing a routing track after one chunk
-// is used. This also needs to be able to tell us if we can use part of the
-// track for small routes.
-class RoutingTrack {
- 
- 
- private:
-  Layer layer_;
-  int64_t x_or_y_;
-};
+class RoutingTrack;
 
 class RoutingVertex {
  public:
-  RoutingVertex(const Point &centre) : centre_(centre) {}
+  RoutingVertex(const Point &centre) : available_(true), centre_(centre) {}
 
   void AddEdge(RoutingEdge *edge) { edges_.push_back(edge); }
   const std::vector<RoutingEdge*> &edges() { return edges_; }
@@ -49,7 +40,19 @@ class RoutingVertex {
 
   const Point &centre() const { return centre_; }
 
+  void set_available(bool available) { available_ = available; }
+  bool available() { return available_; }
+
+  void set_horizontal_track(RoutingTrack *track) { horizontal_track_ = track; }
+  RoutingTrack *horizontal_track() const { return horizontal_track_; }
+  void set_vertical_track(RoutingTrack *track) { vertical_track_ = track; }
+  RoutingTrack *vertical_track() const { return vertical_track_; }
+
  private:
+  bool available_;
+  RoutingTrack *horizontal_track_;
+  RoutingTrack *vertical_track_;
+
   // This is a minor optimisation to avoid having to key things by pointer.
   // This index should be unique within the RoutingGrid that owns this
   // RoutingVertex for the duration of whatever process requires it.
@@ -63,7 +66,7 @@ class RoutingVertex {
 class RoutingEdge {
  public:
   RoutingEdge(RoutingVertex *first, RoutingVertex *second)
-    : first_(first), second_(second), cost_(1.0) {}
+    : available_(true), first_(first), second_(second), cost_(1.0) {}
 
   void set_cost(double cost) { cost_ = cost; }
   double cost() const { return cost_; }
@@ -71,7 +74,16 @@ class RoutingEdge {
   RoutingVertex *first() { return first_; }
   RoutingVertex *second() { return second_; }
 
+  void set_available(bool available) { available_ = available; }
+  bool available() { return available_; }
+
+  void set_track(RoutingTrack *track) { track_ = track; }
+  RoutingTrack *track() const { return track_; }
+
  private:
+  bool available_;
+  RoutingTrack *track_;
+
   RoutingVertex *first_;
   RoutingVertex *second_;
 
@@ -108,6 +120,90 @@ enum RoutingTrackDirection {
   kTrackVertical
 };
 
+class RoutingTrackBlockage {
+ public:
+  RoutingTrackBlockage(int64_t start, int64_t end)
+      : start_(start), end_(end) {
+    LOG_IF(FATAL, end_ <= start_) << "RoutingTrackBlockage start must be before end.";
+  }
+
+  bool Contains(int64_t position);
+  bool IsAfter(int64_t position);
+  bool IsBefore(int64_t position);
+
+  bool Blocks(int64_t low, int64_t high);
+
+  void set_start(int64_t start) { start_ = start; }
+  void set_end(int64_t end) { end_ = end; }
+
+  int64_t start() const { return start_; }
+  int64_t end() const { return end_; }
+
+ private:
+  int64_t start_;
+  int64_t end_;
+};
+
+// RoutingTracks keep track of the edges, which are physical spans, that could
+// fall on them. When such an edge is used for a route, the RoutingTrack
+// determines which other edges must be invalidated.
+//
+// RoutingTracks do not own anything, but keep track of which vertices and
+// edges associated with them. They invalidate those objects when they are used
+// up.
+class RoutingTrack {
+ public:
+  RoutingTrack(const Layer &layer,
+               const RoutingTrackDirection &direction,
+               int64_t offset)
+      : layer_(layer), direction_(direction), offset_(offset) {}
+
+  ~RoutingTrack() {
+    for (RoutingTrackBlockage *blockage : blockages_) { delete blockage; }
+  }
+
+  // Takes ownership of the given pointer.
+  void AddEdge(RoutingEdge *edge);
+  void AddVertex(RoutingVertex *vertex);
+
+  // 
+  void MarkEdgeAsUsed(RoutingEdge *edge);
+
+  void ReportAvailableEdges(std::vector<RoutingEdge*> *edges_out);
+  void ReportAvailableVertices(std::vector<RoutingVertex*> *vertices_out);
+
+  std::string Debug() const;
+
+ private:
+  bool IsBlocked(const Point &point) const { return IsBlocked(point, point); }
+  bool IsBlocked(const Point &low_point, const Point &high_point) const;
+
+  int64_t ProjectOntoTrack(const Point &point) const;
+
+  void MergeBlockage(
+      const Point &low_point, const Point &high_point);
+
+  void SortBlockages();
+
+  // The edges and vertices on this track.
+  // These objects are NOT OWNED by this one.
+  std::set<RoutingEdge*> edges_;
+  std::set<RoutingVertex*> vertices_;
+
+  Layer layer_;
+  RoutingTrackDirection direction_;
+
+  // The x or y coordinate for this track.
+  int64_t offset_;
+
+  // We want to keep a sorted list of blockages, but if we keep them as a std::set
+  // we can't mutate the objects (since then no resorting is performed).
+  // Instead we keep a vector and make sure to sort it ourselves.
+  std::vector<RoutingTrackBlockage*> blockages_;
+};
+
+std::ostream &operator<<(std::ostream &os, const RoutingTrack &track);
+
 struct RoutingLayerInfo {
   Layer layer;
   Rectangle area;
@@ -126,8 +222,12 @@ struct LayerConnectionInfo {
 
 class RoutingGrid {
  public:
-
   ~RoutingGrid() {
+    for (auto entry : tracks_by_layer_) {
+      for (RoutingTrack *track : entry.second) {
+        delete track;
+      }
+    }
     for (RoutingPath *path : paths_) { delete path; }
     for (RoutingEdge *edge : edges_) { delete edge; }
     for (RoutingVertex *vertex : vertices_) { delete vertex; }
@@ -166,19 +266,29 @@ class RoutingGrid {
   RoutingPath *ShortestPath(
       RoutingVertex *begin, RoutingVertex *end);
 
+  // Takes ownership of the given object and accounts for the path's resources
+  // as used.
+  void InstallPath(RoutingPath *path);
+
+  void AddTrackToLayer(RoutingTrack *track, const Layer &layer);
+
   // All installed paths (which we also own).
   std::vector<RoutingPath*> paths_;
 
-  // The list of all owned edges.
   std::vector<RoutingEdge*> edges_;
-
-  // The list of all owned vertices.
   std::vector<RoutingVertex*> vertices_;
+
+  // All routing tracks (we own these).
+  std::map<Layer, std::vector<RoutingTrack*>> tracks_by_layer_;
 
   // The list of all available vertices per layer.
   std::map<Layer, std::vector<RoutingVertex*>> available_vertices_by_layer_;
 
   std::map<Layer, RoutingLayerInfo> layer_infos_;
+
+  // All routing tracks (which we own).
+  std::map<Layer, std::vector<RoutingTrack*>> tracks_;
+
 };
 
 }  // namespace boralago
