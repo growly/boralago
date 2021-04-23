@@ -26,10 +26,24 @@ SkPoint Renderer::MapToSkPoint(const Point &point) {
 }
 
 SkPoint Renderer::MapToSkPoint(const Point &point, const Point &offset) {
-  // TODO(aryap): Probably some sort of scaling situation.
-  Point with_offset = point + offset;
-  SkScalar y = static_cast<SkScalar>(height_px_ - with_offset.y());
-  SkPoint mapped_point = SkPoint::Make(static_cast<SkScalar>(with_offset.x()), y);
+  // 1) Find relative position within the box defined by lower_left_ and
+  //    upper_right_.
+  // 2) Flip y coord for SkPoint.
+  //
+  // SkScalars measure pixels, I think.
+  Point with_offset = point + offset - lower_left_;
+  
+  int64_t full_height = upper_right_.y() - lower_left_.y();
+  int64_t full_width = upper_right_.x() - lower_left_.x();
+
+  SkScalar y =
+      static_cast<SkScalar>(with_offset.y()) * static_cast<SkScalar>(height_px_)
+          / static_cast<SkScalar>(full_height);
+  y = static_cast<SkScalar>(height_px_) - y;
+  SkScalar x = 
+      static_cast<SkScalar>(with_offset.x()) * static_cast<SkScalar>(width_px_)
+          / static_cast<SkScalar>(full_width);
+  SkPoint mapped_point = SkPoint::Make(x, y);
   VLOG(10) << "Mapped " << point << " to (" << mapped_point.fX << ", " 
            << mapped_point.fY << ")";
   return mapped_point;
@@ -201,6 +215,25 @@ void Renderer::DrawRoutingGrid(
 //   (void)out.write(png->data(), png->size());
 // }
 
+void Renderer::RenderToPNG(
+    const Cell &cell,
+    const std::string &filename) {
+  // This code from the Skia tutorial!
+  sk_sp<SkSurface> raster_surface =
+      SkSurface::MakeRasterN32Premul(width_px_, height_px_);
+  SkCanvas* raster_canvas = raster_surface->getCanvas();
+
+  raster_canvas->clear(SK_ColorWHITE);
+  DrawCell(cell, Point(0, 0), raster_canvas);
+
+  sk_sp<SkImage> image(raster_surface->makeImageSnapshot());
+  if (!image) { return; }
+  sk_sp<SkData> png(image->encodeToData());
+  if (!png) { return; }
+  SkFILEWStream out(filename.c_str());
+  out.write(png->data(), png->size());
+}
+
 // HACK HACK HACK
 void Renderer::RenderToPNG(
     const PolyLineCell &poly_line_cell,
@@ -213,7 +246,7 @@ void Renderer::RenderToPNG(
   SkCanvas* raster_canvas = raster_surface->getCanvas();
 
   raster_canvas->clear(SK_ColorWHITE);
-  raster_canvas->translate(200.0f, -200.0f);
+  //raster_canvas->translate(200.0f, -200.0f);
   DrawPolyLineCell(poly_line_cell, raster_canvas);
   DrawCell(cell, Point(0, 0), raster_canvas);
   DrawRoutingGrid(grid, raster_canvas);
@@ -224,6 +257,27 @@ void Renderer::RenderToPNG(
   if (!png) { return; }
   SkFILEWStream out(filename.c_str());
   out.write(png->data(), png->size());
+}
+
+void Renderer::FitWidth(const Cell &cell) {
+  // TODO(aryap): actually apply brain to this
+  auto bb = cell.GetBoundingBox();
+  lower_left_ = bb.first;
+  int64_t dx = bb.second.x() - bb.first.x();
+  LOG(INFO) << dx;
+  double mx = static_cast<double>(width_px_) / static_cast<double>(dx);
+  LOG(INFO) << mx;
+  int64_t dy = bb.second.y() - bb.first.y();
+  LOG(INFO) << dy;
+  int64_t y = bb.first.y() + mx*dy;
+  LOG(INFO) << y;
+  upper_right_ = Point(bb.second.x(), y);
+}
+
+void Renderer::Fit(const Cell &cell) {
+  auto bb = cell.GetBoundingBox();
+  lower_left_ = bb.first;
+  upper_right_ = bb.second;
 }
 
 }   // namespace boralago

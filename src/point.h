@@ -29,6 +29,9 @@ std::ostream &operator<<(std::ostream &os, const Point &point);
 
 // Treat the point as a vector from the origin, then add element-wise.
 Point operator+(const Point &lhs, const Point &rhs);
+Point operator-(const Point &lhs, const Point &rhs);
+
+bool operator==(const Point &lhs, const Point &rhs);
 
 }  // namespace boralago
 

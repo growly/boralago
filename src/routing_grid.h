@@ -18,7 +18,9 @@ class RoutingTrack;
 
 class RoutingVertex {
  public:
-  RoutingVertex(const Point &centre) : available_(true), centre_(centre) {}
+  RoutingVertex(const Point &centre)
+      : available_(true), horizontal_track_(nullptr), vertical_track_(nullptr),
+        centre_(centre) {}
 
   void AddEdge(RoutingEdge *edge) { edges_.insert(edge); }
   bool RemoveEdge(RoutingEdge *edge);
@@ -80,6 +82,7 @@ class RoutingEdge {
   void set_available(bool available) { available_ = available; }
   bool available() { return available_; }
 
+  // Off-grid edges do not have tracks.
   void set_track(RoutingTrack *track) { track_ = track; }
   RoutingTrack *track() const { return track_; }
 
@@ -189,20 +192,31 @@ class RoutingTrack {
     for (RoutingTrackBlockage *blockage : blockages_) { delete blockage; }
   }
 
-  // Takes ownership of the given pointer.
-  void AddEdge(RoutingEdge *edge);
+  // Tries to add an edge between the two vertices, returning true if
+  // successful and false if no edge could be added (it was blocked).
+  bool MaybeAddEdgeBetween(RoutingVertex *one, RoutingVertex *the_other);
+
   bool RemoveEdge(RoutingEdge *edge, bool and_delete);
 
   // Adds the given vertex to this track, but does not take ownership of it.
   // Generates an edge from the given vertex to every other vertex in the
   // track, as long as that edge would not be blocked already.
-  void AddVertex(RoutingVertex *vertex);
+  bool AddVertex(RoutingVertex *vertex);
 
   // Remove the vertex from this track, and remove any edge that uses it.
   bool RemoveVertex(RoutingVertex *vertex);
 
   // 
-  void MarkEdgeAsUsed(RoutingEdge *edge);
+  void MarkEdgeAsUsed(RoutingEdge *edge,
+                      std::set<RoutingVertex*> *removed_vertices);
+
+  // Triest to connect the target vertex to a canidate vertex placed at the
+  // nearest point on the track to the given point. If successful, the new
+  // vertex is returned, otherwise nullptr. The return vertex is property of
+  // the caller and any generated edge is property of the track.
+  RoutingVertex *CreateNearestVertexAndConnect(
+      const Point &point,
+      RoutingVertex *target);
 
   void ReportAvailableEdges(std::vector<RoutingEdge*> *edges_out);
   void ReportAvailableVertices(std::vector<RoutingVertex*> *vertices_out);
@@ -269,6 +283,7 @@ class RoutingGrid {
       }
     }
     for (RoutingPath *path : paths_) { delete path; }
+    for (RoutingEdge *edge : off_grid_edges_) { delete edge; }
     for (RoutingVertex *vertex : vertices_) { delete vertex; }
   }
 
@@ -285,6 +300,8 @@ class RoutingGrid {
   bool AddRouteBetween(
       const Port &begin, const Port &end);
 
+  void AddVertex(RoutingVertex *vertex);
+
   void DeleteEdge(RoutingEdge *edge);
   bool RemoveVertex(RoutingVertex *vertex, bool and_delete);
 
@@ -300,7 +317,7 @@ class RoutingGrid {
 
   std::vector<RoutingVertex*> &GetAvailableVertices(const Layer &layer);
 
-  RoutingVertex *FindNearestAvailableVertex(
+  RoutingVertex *GenerateGridVertexForPoint(
       const Point &point, const Layer &layer);
 
   // Returns nullptr if no path found. If a RoutingPath is found, the caller
@@ -316,6 +333,10 @@ class RoutingGrid {
 
   // All installed paths (which we also own).
   std::vector<RoutingPath*> paths_;
+
+  // Edges that do not fall on tracks, so we own them (until they are contained
+  // in a RoutingPath).
+  std::set<RoutingEdge*> off_grid_edges_;
 
   // All owned vertices.
   std::vector<RoutingVertex*> vertices_;

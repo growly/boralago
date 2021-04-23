@@ -23,8 +23,18 @@ class Renderer {
  public:
   Renderer(uint64_t width_px, uint64_t height_px)
       : width_px_(width_px),
-        height_px_(height_px) {
-  }
+        height_px_(height_px),
+        lower_left_(Point(0, 0)),
+        upper_right_(Point(1000, 1000)) {}
+
+  void Fit(const Cell &cell);
+
+  void FitWidth(const Cell &cell);
+  void FitHeight(const Cell &cell);
+
+  void RenderToPNG(
+      const Cell &cell,
+      const std::string &filename);
 
   void RenderToPNG(
       const PolyLineCell &poly_line_cell,
@@ -50,6 +60,9 @@ class Renderer {
 
   uint64_t width_px_;
   uint64_t height_px_;
+
+  Point lower_left_;
+  Point upper_right_;
 };
 
 }  // namespace boralago

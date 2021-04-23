@@ -47,6 +47,11 @@ int main(int argc, char **argv) {
   some_region->set_start({100, 100});
   some_region->AddSegment({100, 200});
 
+  boralago::PolyLine *other_region = inverter.AddPolyLine();
+  other_region->set_layer(4);
+  other_region->set_start({0, 150});
+  other_region->AddSegment({0, 250}, 10);
+
   boralago::InflatorRules rules;
   boralago::PolyLineInflator inflator(rules);
 
@@ -56,8 +61,15 @@ int main(int argc, char **argv) {
 
   // Tile the cell.
   boralago::Cell top;
-  top.AddInstance(boralago::Instance{&cell, boralago::Point(0, 0)});
-  top.AddInstance(boralago::Instance{&cell, boralago::Point(100, 100)});
+
+  auto box = cell.GetBoundingBox();
+  int64_t dx = box.second.x() - box.first.x();
+  int64_t dy = box.second.y() - box.first.y();
+  for (int i = 0; i < 9; ++i) {
+    for (int j = 0; j < 6; ++j) {
+      top.AddInstance(boralago::Instance{&cell, boralago::Point(i*dx, j*dy)});
+    }
+  }
 
   // Create a routing grid.
   boralago::RoutingLayerInfo layer_1;
@@ -93,6 +105,7 @@ int main(int argc, char **argv) {
   grid.AddRouteBetween(a, b);
 
   boralago::Renderer renderer(2048, 2048);
+  renderer.FitWidth(top);
   renderer.RenderToPNG(inverter, top, grid, "test.png");
 
   return EXIT_SUCCESS;

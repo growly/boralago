@@ -76,14 +76,19 @@ bool RoutingTrack::RemoveEdge(RoutingEdge *edge, bool and_delete) {
   return true;
 }
 
-void RoutingTrack::AddEdge(RoutingEdge *edge) {
+bool RoutingTrack::MaybeAddEdgeBetween(
+    RoutingVertex *one, RoutingVertex *the_other) {
+  if (IsBlockedBetween(one->centre(), the_other->centre()))
+    return false;
+  RoutingEdge *edge = new RoutingEdge(one, the_other);
   edge->set_track(this);
   edge->first()->AddEdge(edge);
   edge->second()->AddEdge(edge);
   edges_.insert(edge);
+  return true;
 }
 
-void RoutingTrack::AddVertex(RoutingVertex *vertex) {
+bool RoutingTrack::AddVertex(RoutingVertex *vertex) {
   LOG_IF(FATAL, IsBlocked(vertex->centre()))
       << "RoutingTrack cannot add vertex at " << vertex->centre()
       << ", it is blocked";
@@ -92,13 +97,13 @@ void RoutingTrack::AddVertex(RoutingVertex *vertex) {
 
   // Generate an edge between the new vertex and every other vertex, unless it
   // would be blocked.
+  bool any_success = false;
   for (RoutingVertex *other : vertices_) {
-    if (IsBlockedBetween(other->centre(), vertex->centre()))
-      continue;
-    RoutingEdge *edge = new RoutingEdge(vertex, other);
-    AddEdge(edge);
+    // We _don't want_ short-circuiting here.
+    any_success |= MaybeAddEdgeBetween(vertex, other);
   }
   vertices_.insert(vertex);
+  return any_success;
 }
 
 bool RoutingTrack::RemoveVertex(RoutingVertex *vertex) {
@@ -114,10 +119,11 @@ bool RoutingTrack::RemoveVertex(RoutingVertex *vertex) {
   return true;
 }
 
-void RoutingTrack::MarkEdgeAsUsed(RoutingEdge *edge) {
-  // Edge must be known.
-  LOG_IF(FATAL, edges_.find(edge) == edges_.end())
-      << "Edge " << edge << " is unknown to RoutingTrack " << *this;
+void RoutingTrack::MarkEdgeAsUsed(RoutingEdge *edge,
+                                  std::set<RoutingVertex*> *removed_vertices) {
+  if (edges_.find(edge) == edges_.end())
+    // Possible off-grid edge?
+    return;
 
   CreateBlockage(edge->first()->centre(), edge->second()->centre());
 
@@ -125,6 +131,7 @@ void RoutingTrack::MarkEdgeAsUsed(RoutingEdge *edge) {
   // Ownership of this edge is transferred to the RoutingPath that owns it.
   RemoveEdge(edge, false);
 
+  // Remove other edges that are blocked by this.
   for (RoutingEdge *edge : edges_) {
     if (IsBlockedBetween(edge->first()->centre(), edge->second()->centre())) {
       // Ownership of other blocked edges is not transferred; they are just
@@ -132,6 +139,61 @@ void RoutingTrack::MarkEdgeAsUsed(RoutingEdge *edge) {
       RemoveEdge(edge, true);
     }
   }
+
+  // Remove other vertices that are blocked by this.
+  for (RoutingVertex *vertex : vertices_) {
+    if (IsBlocked(vertex->centre()))
+      removed_vertices->insert(vertex);
+  }
+}
+
+RoutingVertex *RoutingTrack::CreateNearestVertexAndConnect(
+    const Point &point,
+    RoutingVertex *target) {
+  // Candidate position:
+  Point candidate_centre;
+  switch (direction_) {
+    case RoutingTrackDirection::kTrackHorizontal:
+      candidate_centre = Point(point.x(), offset_);
+      break;
+    case RoutingTrackDirection::kTrackVertical:
+      candidate_centre = Point(offset_, point.y());
+      break;
+    default:
+      LOG(FATAL) << "This RoutingTrack has an unrecognised "
+                 << "RoutingTrackDirection: " << direction_;
+  }
+
+  if (candidate_centre == point) {
+    return target;
+  }
+
+  if (IsBlocked(candidate_centre))
+    return nullptr;
+
+  if (IsBlockedBetween(candidate_centre, target->centre()))
+    return nullptr;
+
+  RoutingVertex *bridging_vertex = new RoutingVertex(candidate_centre);
+  if (!AddVertex(bridging_vertex)) {
+    LOG(FATAL) << "I thought we made sure this couldn't happen already.";
+    delete bridging_vertex;
+    return nullptr;
+  }
+
+  switch (direction_) {
+    case RoutingTrackDirection::kTrackHorizontal:
+      bridging_vertex->set_horizontal_track(this);
+      break;
+    case RoutingTrackDirection::kTrackVertical:
+      bridging_vertex->set_vertical_track(this);
+      break;
+    default:
+      LOG(FATAL) << "This RoutingTrack has an unrecognised "
+                 << "RoutingTrackDirection: " << direction_;
+  }
+
+  return bridging_vertex;
 }
 
 void RoutingTrack::ReportAvailableEdges(
@@ -329,7 +391,7 @@ std::pair<RoutingLayerInfo*, RoutingLayerInfo*>
   return std::pair<RoutingLayerInfo*, RoutingLayerInfo*>(nullptr, nullptr);
 }
 
-RoutingVertex *RoutingGrid::FindNearestAvailableVertex(
+RoutingVertex *RoutingGrid::GenerateGridVertexForPoint(
     const Point &point, const Layer &layer) {
   // A key function of this class is to determine an appropriate starting point
   // on the routing grid for routing to/from an arbitrary point.
@@ -364,9 +426,80 @@ RoutingVertex *RoutingGrid::FindNearestAvailableVertex(
 
   // Should sort automatically based on operator< for first and second entries
   // in pairs.
-  std::sort(costed_vertices.begin(), costed_vertices.end());
+  std::sort(costed_vertices.begin(),
+            costed_vertices.end(),
+            std::greater<std::pair<uint64_t, RoutingVertex*>>());
 
-  return costed_vertices.front().second;
+  // To ensure we can go the "last mile", we check if the required paths, as
+  // projected on the tracks on which the nearest vertex lies, are legal.
+  // Consider 4 vertices X on the RoutingGrid surrounding the port O. The
+  // sections (A) and (B) must be legal on the horizontal or vertical tracks
+  // to which we must connect O to get to X:
+  //
+  //     (A)
+  //    X---+       X
+  // (B)|   |(B')
+  //    +---O
+  //     (A')
+  //
+  //
+  //    X           X
+  //
+  // If neither is legal, we cannot use that vertex. In the diagram, (A) and
+  // (B) are the bridging edges, and (A') and (B') are the off-grid edges.
+  //
+  // We generate a new RoutingVertex for the landing spot on each track and
+  // provide that to the grid-router to use in finding a shortest path.
+  //
+  // TODO(aryap): A better idea is to create up to, say, 4 candidate bridging
+  // vertices on legal tracks around the point so that they can be included in
+  // the global shortest-path search. This would avoid having to turn corners
+  // and go backwards, for example.
+  while (!costed_vertices.empty()) {
+    RoutingVertex *candidate = costed_vertices.back().second;
+    costed_vertices.pop_back();
+
+    // Try putting it on the vertical track and then horizontal track.
+    std::vector<RoutingTrack*> tracks = {
+      candidate->vertical_track(), candidate->horizontal_track()};
+    RoutingVertex *bridging_vertex = nullptr;
+    for (size_t i = 0; i < tracks.size() && bridging_vertex == nullptr; ++i) {
+      bridging_vertex = tracks[i]->CreateNearestVertexAndConnect(
+          point, candidate);
+    }
+    if (bridging_vertex == nullptr)
+      continue;
+
+    // TODO(aryap): Need a way to roll back this temporary objects in case the
+    // caller's entire process fails - i.e. a vertex can be created for the
+    // starting point but not for the ending point.
+
+    // Success, so add a new vertex at this position and the bridging one too.
+    if (bridging_vertex == candidate) {
+      // The closest vertex was the candidate itself, no bridging vertex necessary.
+      return bridging_vertex;
+    }
+
+    bridging_vertex->AddConnectedLayer(layer);
+    AddVertex(bridging_vertex);
+
+    RoutingVertex *off_grid = new RoutingVertex(point);
+    off_grid->AddConnectedLayer(layer);
+    AddVertex(off_grid);
+
+    RoutingEdge *edge = new RoutingEdge(bridging_vertex, off_grid);
+    bridging_vertex->AddEdge(edge);
+    off_grid->AddEdge(edge);
+    
+    // TODO(aryap): It's unclear what layer this edge is on. The opposite of
+    // what the bridging edge is on, I guess.
+    // TODO(aryap): It's not clear if the off-grid edge will be legal. We have
+    // to check with the whole grid.
+
+    off_grid_edges_.insert(edge);
+    return off_grid;
+  }
+  return nullptr;
 }
 
 std::vector<RoutingVertex*> &RoutingGrid::GetAvailableVertices(
@@ -475,17 +608,18 @@ void RoutingGrid::ConnectLayers(
       vertex->set_horizontal_track(horizontal_track);
       vertex->set_vertical_track(vertical_track);
 
-      vertices_.push_back(vertex);  // The class owns all of these.
       horizontal_track->AddVertex(vertex);
       vertical_track->AddVertex(vertex);
 
       ++num_vertices;
       vertex->AddConnectedLayer(first);
-      first_layer_vertices.push_back(vertex);
       vertex->AddConnectedLayer(second);
-      second_layer_vertices.push_back(vertex);
+
+      AddVertex(vertex);
+
       VLOG(10) << "Vertex created: " << vertex->centre() << " on layers: "
                << absl::StrJoin(vertex->connected_layers(), ", ");
+      // TODO(aryap): Remove these.
       y_vertices.push_back(vertex);
     }
   }
@@ -509,9 +643,17 @@ void RoutingGrid::ConnectLayers(
   }
 }
 
+void RoutingGrid::AddVertex(RoutingVertex *vertex) {
+  for (const Layer &layer : vertex->connected_layers()) {
+    std::vector<RoutingVertex*> &available = GetAvailableVertices(layer);
+    available.push_back(vertex);
+  }
+  vertices_.push_back(vertex);  // The class owns all of these.
+}
+
 bool RoutingGrid::AddRouteBetween(
     const Port &begin, const Port &end) {
-  RoutingVertex *begin_vertex = FindNearestAvailableVertex(
+  RoutingVertex *begin_vertex = GenerateGridVertexForPoint(
       begin.centre(), begin.layer());
   if (!begin_vertex) {
     LOG(ERROR) << "Could not find available vertex for begin port.";
@@ -519,7 +661,7 @@ bool RoutingGrid::AddRouteBetween(
   }
   LOG(INFO) << "Nearest vertex to begin is " << begin_vertex->centre();
 
-  RoutingVertex *end_vertex = FindNearestAvailableVertex(
+  RoutingVertex *end_vertex = GenerateGridVertexForPoint(
       end.centre(), end.layer());
   if (!end_vertex) {
     LOG(ERROR) << "Could not find available vertex for end port.";
@@ -538,12 +680,15 @@ bool RoutingGrid::AddRouteBetween(
   LOG(INFO) << "Found path: " << *shortest_path;
 
   InstallPath(shortest_path.release());
+
   return true;
 }
 
 bool RoutingGrid::RemoveVertex(RoutingVertex *vertex, bool and_delete) {
-  vertex->horizontal_track()->RemoveVertex(vertex);
-  vertex->vertical_track()->RemoveVertex(vertex);
+  if (vertex->horizontal_track())
+    vertex->horizontal_track()->RemoveVertex(vertex);
+  if (vertex->vertical_track())
+    vertex->vertical_track()->RemoveVertex(vertex);
 
   for (const Layer &layer : vertex->connected_layers()) {
     auto it = available_vertices_by_layer_.find(layer);
@@ -571,13 +716,20 @@ bool RoutingGrid::RemoveVertex(RoutingVertex *vertex, bool and_delete) {
 void RoutingGrid::InstallPath(RoutingPath *path) {
   LOG_IF(FATAL, path->Empty()) << "Cannot install an empty path.";
   // Remove edges from the track which owns them.
+  std::set<RoutingVertex*> unusable_vertices;
   for (RoutingEdge *edge : path->edges()) {
-    edge->track()->MarkEdgeAsUsed(edge);
+    if (edge->track() != nullptr)
+      edge->track()->MarkEdgeAsUsed(edge, &unusable_vertices);
   }
 
   // Remove vertices from all of the tracks which reference them.
   for (RoutingVertex *vertex : path->vertices()) {
+    unusable_vertices.erase(vertex);
     RemoveVertex(vertex, false);
+  }
+
+  for (RoutingVertex *vertex : unusable_vertices) {
+    RemoveVertex(vertex, true);
   }
   
   paths_.push_back(path);
