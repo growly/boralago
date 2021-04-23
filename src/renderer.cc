@@ -168,14 +168,12 @@ void Renderer::DrawRoutingGrid(
   // Draw paths.
   LOG(INFO) << "Grid has " << grid.paths().size() << " paths.";
   for (RoutingPath *path : grid.paths()) {
-    if (path->Empty()) {
-      LOG(WARNING) << "Path is empty: " << path;
-    }
     SkPath sk_path;
-    sk_path.moveTo(MapToSkPoint(path->begin()->centre()));
-
-    for (RoutingEdge *edge : path->edges()) {
-      sk_path.lineTo(MapToSkPoint(edge->second()->centre()));
+    RoutingVertex *first = path->vertices().front();
+    sk_path.moveTo(MapToSkPoint(first->centre()));
+    for (auto iter = std::next(path->vertices().begin());
+         iter != path->vertices().end(); ++iter) {
+      sk_path.lineTo(MapToSkPoint((*iter)->centre()));
     }
 
     // TODO(aryap): Actually you want each edge to have its layer colour...

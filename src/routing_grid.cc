@@ -19,6 +19,34 @@
 
 namespace boralago {
 
+bool RoutingVertex::RemoveEdge(RoutingEdge *edge) {
+  return edges_.erase(edge) > 0;
+}
+
+RoutingPath::RoutingPath(
+    RoutingVertex *start, const std::deque<RoutingEdge*> edges)
+    : edges_(edges.begin(), edges.end()) {
+  vertices_.push_back(start);
+  RoutingVertex *last = start;
+  for (RoutingEdge *edge : edges) {
+    RoutingVertex *next_vertex =
+        edge->first() == last ? edge->second() : edge->first();
+    vertices_.push_back(next_vertex);
+    last = next_vertex;
+  }
+}
+
+std::ostream &operator<<(std::ostream &os, const RoutingPath &path) {
+  if (path.Empty()) {
+    os << "empty path";
+    return os;
+  }
+  for (RoutingVertex *vertex : path.vertices()) {
+    os << vertex->centre() << " ";
+  }
+  return os;
+}
+
 bool RoutingTrackBlockage::Contains(int64_t position) {
   return position >= start_ && position <= end_;
 }
@@ -36,7 +64,22 @@ bool RoutingTrackBlockage::Blocks(int64_t low, int64_t high) {
   return Contains(low) || Contains(high) || (low <= start_ && high >= end_);
 }
 
+bool RoutingTrack::RemoveEdge(RoutingEdge *edge, bool and_delete) {
+  if (edges_.erase(edge) == 0)
+    return false;
+
+  // Remove the edge from the vertices on which it lands.
+  edge->first()->RemoveEdge(edge);
+  edge->second()->RemoveEdge(edge);
+  if (and_delete)
+    delete edge;
+  return true;
+}
+
 void RoutingTrack::AddEdge(RoutingEdge *edge) {
+  edge->set_track(this);
+  edge->first()->AddEdge(edge);
+  edge->second()->AddEdge(edge);
   edges_.insert(edge);
 }
 
@@ -44,17 +87,31 @@ void RoutingTrack::AddVertex(RoutingVertex *vertex) {
   LOG_IF(FATAL, IsBlocked(vertex->centre()))
       << "RoutingTrack cannot add vertex at " << vertex->centre()
       << ", it is blocked";
+  LOG_IF(FATAL, vertices_.find(vertex) != vertices_.end())
+      << "Duplicate vertex added to track";
 
-  //if (usable_blockages_.empty()) {
-  //  start_ = ProjectOntoTrack(vertex->centre());
-  //  end_ = start_;
-  //  usables_blockages_.
-  //} else {
-  //  int64_t vertex_offset = ProjectOntoTrack(vertex->centre());
-  //  start_ = std::min(start_, vertex_offset);
-  //  end_ = std::max(end_, vertex_offset);
-  //}
+  // Generate an edge between the new vertex and every other vertex, unless it
+  // would be blocked.
+  for (RoutingVertex *other : vertices_) {
+    if (IsBlockedBetween(other->centre(), vertex->centre()))
+      continue;
+    RoutingEdge *edge = new RoutingEdge(vertex, other);
+    AddEdge(edge);
+  }
   vertices_.insert(vertex);
+}
+
+bool RoutingTrack::RemoveVertex(RoutingVertex *vertex) {
+  if (vertices_.erase(vertex) == 0) {
+    // We didn't know about this vertex.
+    return false;
+  }
+
+  for (RoutingEdge *edge : edges_) {
+    if (edge->first() == vertex || edge->second() == vertex)
+      RemoveEdge(edge, true);
+  }
+  return true;
 }
 
 void RoutingTrack::MarkEdgeAsUsed(RoutingEdge *edge) {
@@ -62,9 +119,19 @@ void RoutingTrack::MarkEdgeAsUsed(RoutingEdge *edge) {
   LOG_IF(FATAL, edges_.find(edge) == edges_.end())
       << "Edge " << edge << " is unknown to RoutingTrack " << *this;
 
-  MergeBlockage(edge->first()->centre(), edge->second()->centre());
+  CreateBlockage(edge->first()->centre(), edge->second()->centre());
 
+  // Remove the edge from our collection.
+  // Ownership of this edge is transferred to the RoutingPath that owns it.
+  RemoveEdge(edge, false);
 
+  for (RoutingEdge *edge : edges_) {
+    if (IsBlockedBetween(edge->first()->centre(), edge->second()->centre())) {
+      // Ownership of other blocked edges is not transferred; they are just
+      // removed.
+      RemoveEdge(edge, true);
+    }
+  }
 }
 
 void RoutingTrack::ReportAvailableEdges(
@@ -106,10 +173,13 @@ std::string RoutingTrack::Debug() const {
   return ss.str();
 }
 
-bool RoutingTrack::IsBlocked(
-    const Point &low_point, const Point &high_point) const {
-  int64_t low = ProjectOntoTrack(low_point);
-  int64_t high = ProjectOntoTrack(high_point);
+bool RoutingTrack::IsBlockedBetween(
+    const Point &one_end, const Point &other_end) const {
+  int64_t low = ProjectOntoTrack(one_end);
+  int64_t high = ProjectOntoTrack(other_end);
+  if (low > high)
+    std::swap(low, high);
+
   for (RoutingTrackBlockage *blockage : blockages_) {
     if (blockage->Blocks(low, high)) return true;
   }
@@ -130,18 +200,18 @@ int64_t RoutingTrack::ProjectOntoTrack(const Point &point) const {
   return 0;
 }
 
-// Spans extend existing spans of the same type. We assume there there can only
-// be overlaps of blockages onto usable sections, but not of usable sections
-// onto blockages.
-void RoutingTrack::MergeBlockage(
-      const Point &low_point, const Point &high_point) {
-  int64_t low = ProjectOntoTrack(low_point);
-  int64_t high = ProjectOntoTrack(high_point);
+RoutingTrackBlockage *RoutingTrack::CreateBlockage(
+      const Point &one_end, const Point &other_end) {
+  int64_t low = ProjectOntoTrack(one_end);
+  int64_t high = ProjectOntoTrack(other_end);
+  if (low > high)
+    std::swap(low, high);
 
   if (blockages_.empty()) {
-    blockages_.push_back(new RoutingTrackBlockage(low, high));
+    RoutingTrackBlockage *blockage = new RoutingTrackBlockage(low, high);
+    blockages_.push_back(blockage);
     // Already sorted!
-    return;
+    return blockage;
   }
   // RoutingTrackBlockages should already be sorted in ascending order of
   // position.
@@ -158,8 +228,10 @@ void RoutingTrack::MergeBlockage(
     if (blockage->Blocks(low, high)) {
       if (first == blockages_.end())
         first = it;
-      else
+      else if (it == std::next(last)) {
+        // Extend the last iterator only if it is consecutive.
         last = it;
+      }
     }
   }
 
@@ -168,7 +240,7 @@ void RoutingTrack::MergeBlockage(
     RoutingTrackBlockage *blockage = new RoutingTrackBlockage(low, high);
     blockages_.push_back(blockage);
     SortBlockages();
-    return;
+    return blockage;
   }
 
   if (last == blockages_.end()) {
@@ -189,6 +261,7 @@ void RoutingTrack::MergeBlockage(
 
   blockages_.push_back(blockage);
   SortBlockages();
+  return blockage;
 }
 
 void RoutingTrack::SortBlockages() {
@@ -322,7 +395,6 @@ int64_t modulo(int64_t a, int64_t b) {
   return remainder < 0? remainder + b : remainder;
 }
 
-
 }   // namespace
 
 // TODO(aryap): Do we need to protect against "connect"ing the same layers
@@ -366,7 +438,6 @@ void RoutingGrid::ConnectLayers(
   std::vector<RoutingVertex*> &second_layer_vertices =
       GetAvailableVertices(second);
 
-  size_t num_edges = 0;
   size_t num_vertices = 0;
 
   std::map<int64_t, RoutingTrack*> vertical_tracks;
@@ -419,48 +490,10 @@ void RoutingGrid::ConnectLayers(
     }
   }
 
-  // Generate edges.
-  for (size_t i = 0; i < vertex_by_ordinal.size(); ++i) {
-    // The vertices in our column, for a given x (given by i).
-    std::vector<RoutingVertex*> &y_vertices = vertex_by_ordinal[i];
-
-    for (size_t j = 0; j < y_vertices.size(); ++j) {
-      // Ever vertex gets an edge to every other vertex in its row and column.
-      RoutingVertex *current = y_vertices[j];
-
-      RoutingTrack *vertical_track = current->vertical_track();
-
-      // Enumerate all the other vertices in this column. Start at j + 1 to
-      // avoid duplicating edges. (Vertices below should already have created
-      // an edge to this one.)
-      for (size_t p = j + 1; p < vertex_by_ordinal.size(); ++p) {
-        // RoutingVertex *other = vertex_by_oridinal[i][p];
-        RoutingVertex *other = y_vertices[p];
-        RoutingEdge *edge = new RoutingEdge(current, other);
-        ++num_edges;
-        edges_.push_back(edge);  // The class owns all of these.
-        current->AddEdge(edge);
-        other->AddEdge(edge);
-        edge->set_track(vertical_track);
-        vertical_track->AddEdge(edge);
-      }
-
-      RoutingTrack *horizontal_track = current->horizontal_track();
-
-      // Enumerate all the other vertices in this row. Again, start at i + 1 to
-      // avoid duplicating edges.
-      for (size_t q = i + 1; q < vertex_by_ordinal.size(); ++q) {
-        RoutingVertex *other = vertex_by_ordinal[q][j];
-        RoutingEdge *edge = new RoutingEdge{current, other};
-        ++num_edges;
-        edges_.push_back(edge);  // The class owns all of these.
-        current->AddEdge(edge);
-        other->AddEdge(edge);
-        edge->set_track(horizontal_track);
-        horizontal_track->AddEdge(edge);
-      }
-    }
-  }
+  size_t num_edges = 0;
+  for (auto entry : tracks_by_layer_)
+    for (RoutingTrack *track : entry.second)
+      num_edges += track->edges().size();
 
   LOG(INFO) << "Connected layer " << first << " and " << second << "; "
             << "generated " << horizontal_tracks.size() << " horizontal and "
@@ -471,7 +504,7 @@ void RoutingGrid::ConnectLayers(
   for (auto entry : tracks_by_layer_) {
     const Layer &layer = entry.first;
     for (RoutingTrack *track : entry.second) {
-      LOG(INFO) << layer << " track: " << *track;
+      VLOG(10) << layer << " track: " << *track;
     }
   }
 }
@@ -484,12 +517,15 @@ bool RoutingGrid::AddRouteBetween(
     LOG(ERROR) << "Could not find available vertex for begin port.";
     return false;
   }
+  LOG(INFO) << "Nearest vertex to begin is " << begin_vertex->centre();
+
   RoutingVertex *end_vertex = FindNearestAvailableVertex(
       end.centre(), end.layer());
   if (!end_vertex) {
     LOG(ERROR) << "Could not find available vertex for end port.";
     return false;
   }
+  LOG(INFO) << "Nearest vertex to end is " << end_vertex->centre();
 
   std::unique_ptr<RoutingPath> shortest_path(
       ShortestPath(begin_vertex, end_vertex));
@@ -499,13 +535,49 @@ bool RoutingGrid::AddRouteBetween(
     return false;
   }
 
+  LOG(INFO) << "Found path: " << *shortest_path;
+
   InstallPath(shortest_path.release());
   return true;
 }
 
+bool RoutingGrid::RemoveVertex(RoutingVertex *vertex, bool and_delete) {
+  vertex->horizontal_track()->RemoveVertex(vertex);
+  vertex->vertical_track()->RemoveVertex(vertex);
+
+  for (const Layer &layer : vertex->connected_layers()) {
+    auto it = available_vertices_by_layer_.find(layer);
+    if (it == available_vertices_by_layer_.end())
+      continue;
+    auto &available_vertices = it->second;
+    auto pos = std::find(
+        available_vertices.begin(), available_vertices.end(), vertex);
+    LOG_IF(FATAL, pos == available_vertices.end())
+        << "Did not find vertex we're removing in available ones for layer "
+        << layer << "; vertex: " << vertex;
+    available_vertices.erase(pos);
+  }
+
+  auto pos = std::find(vertices_.begin(), vertices_.end(), vertex);
+  LOG_IF(FATAL, pos == vertices_.end())
+      << "Did not find vertex we're removing in RoutingGrid list of "
+      << "vertices_: " << vertex;
+  vertices_.erase(pos);
+  if (and_delete)
+    delete vertex;
+  return true; // TODO(aryap): Always returning true, huh...
+}
+
 void RoutingGrid::InstallPath(RoutingPath *path) {
+  LOG_IF(FATAL, path->Empty()) << "Cannot install an empty path.";
+  // Remove edges from the track which owns them.
   for (RoutingEdge *edge : path->edges()) {
     edge->track()->MarkEdgeAsUsed(edge);
+  }
+
+  // Remove vertices from all of the tracks which reference them.
+  for (RoutingVertex *vertex : path->vertices()) {
+    RemoveVertex(vertex, false);
   }
   
   paths_.push_back(path);
@@ -563,11 +635,13 @@ RoutingPath *RoutingGrid::ShortestPath(
       break;
     }
 
-    //seen.add(current);
-
     for (RoutingEdge *edge : current->edges()) {
-      // Searching outward, always check the 2nd ("far") vertex of an edge.
-      RoutingVertex *next = edge->second();
+      // We don't know what direction we're using the edge in, and edges are
+      // not directional per se, so pick the side that isn't the one we came in
+      // on:
+      RoutingVertex *next =
+          edge->first() == current ? edge->second() : edge->first();
+
       size_t next_index = next->contextual_index();
       double next_cost = cost[current_index] + edge->cost() + next->cost();
 
@@ -587,7 +661,8 @@ RoutingPath *RoutingGrid::ShortestPath(
   RoutingEdge *last_edge = prev[end_index].second;
 
   while (last_edge != nullptr) {
-    LOG_IF(FATAL, last_edge->first() != vertices_[last_index])
+    LOG_IF(FATAL, (last_edge->first() != vertices_[last_index] &&
+                   last_edge->second() != vertices_[last_index]))
         << "last_edge does not land back at source vertex";
 
     shortest_edges.push_front(last_edge);
@@ -604,12 +679,13 @@ RoutingPath *RoutingGrid::ShortestPath(
 
   if (shortest_edges.empty()) {
     return nullptr;
-  } else if (shortest_edges.front()->first() != begin) {
+  } else if (shortest_edges.front()->first() != begin &&
+             shortest_edges.front()->second() != begin) {
     LOG(FATAL) << "Did not find beginning vertex.";
     return nullptr;
   }
 
-  RoutingPath *path = new RoutingPath(shortest_edges);
+  RoutingPath *path = new RoutingPath(begin, shortest_edges);
   return path;
 }
 

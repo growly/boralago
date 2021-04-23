@@ -86,8 +86,9 @@ int main(int argc, char **argv) {
 
 
   // Make up ports for test.
-  boralago::Port a(boralago::Point(75, 75), 50, 50, 1, "VDD");
+  boralago::Port a(boralago::Point(150, 150), 50, 50, 1, "VDD");
   boralago::Port b(boralago::Point(465, 465), 50, 50, 2, "VDD");
+  grid.AddRouteBetween(a, b);
   grid.AddRouteBetween(a, b);
   grid.AddRouteBetween(a, b);
 

@@ -20,8 +20,10 @@ class RoutingVertex {
  public:
   RoutingVertex(const Point &centre) : available_(true), centre_(centre) {}
 
-  void AddEdge(RoutingEdge *edge) { edges_.push_back(edge); }
-  const std::vector<RoutingEdge*> &edges() { return edges_; }
+  void AddEdge(RoutingEdge *edge) { edges_.insert(edge); }
+  bool RemoveEdge(RoutingEdge *edge);
+
+  //const std::set<RoutingEdge*> &edges() { return edges_; }
 
   uint64_t L1DistanceTo(const Point &point);
 
@@ -36,7 +38,7 @@ class RoutingVertex {
   void set_contextual_index(size_t index) { contextual_index_ = index; }
   size_t contextual_index() const { return contextual_index_; }
 
-  const std::vector<RoutingEdge*> edges() const { return edges_; }
+  const std::set<RoutingEdge*> edges() const { return edges_; }
 
   const Point &centre() const { return centre_; }
 
@@ -60,9 +62,10 @@ class RoutingVertex {
 
   Point centre_;
   std::vector<Layer> connected_layers_;
-  std::vector<RoutingEdge*> edges_;
+  std::set<RoutingEdge*> edges_;
 };
 
+// Edges are NOT directed.
 class RoutingEdge {
  public:
   RoutingEdge(RoutingVertex *first, RoutingVertex *second)
@@ -80,6 +83,8 @@ class RoutingEdge {
   void set_track(RoutingTrack *track) { track_ = track; }
   RoutingTrack *track() const { return track_; }
 
+  std::vector<RoutingVertex*> VertexList() const;
+
  private:
   bool available_;
   RoutingTrack *track_;
@@ -94,26 +99,47 @@ class RoutingEdge {
 
 class RoutingPath {
  public:
-  RoutingPath(const std::deque<RoutingEdge*> edges)
-      : edges_(edges.begin(), edges.end()) {}
-
-  RoutingVertex *begin() const {
-    return Empty() ? nullptr : edges_.front()->first();
+  // We seize ownership of the edges and vertices given to this path.
+  //
+  // TODO(aryap): Maybe we should just leave ownership up to the RoutingGrid
+  // and just make sure all the referenced edges and vertices in paths are
+  // ultimately deleted anyway.
+  //
+  // TODO(aryap): Yeah, this makes me nervous. In order to avoid simply keeping
+  // all routing resources, something you'd call a premature optimisation, I
+  // now have to make sure that ownership of used edges is transferred from
+  // wherever into the paths. This better not bite me in the ass like it
+  // absolutely is going to.
+  RoutingPath(RoutingVertex *start, const std::deque<RoutingEdge*> edges);
+  ~RoutingPath() {
+    for (RoutingVertex *vertex : vertices_) { delete vertex; }
+    for (RoutingEdge *edge : edges_) { delete edge; }
   }
-  RoutingVertex *end() const {
-    return Empty() ? nullptr : edges_.back()->second();
-  }
 
-  //PolyLineCell *AsPolyLineCell() const;
+  RoutingVertex *Begin() const {
+    return Empty() ? nullptr : vertices_.front();
+  }
+  RoutingVertex *End() const {
+    return Empty() ? nullptr : vertices_.back();
+  }
 
   bool Empty() const { return edges_.empty(); }
 
+  const std::vector<RoutingVertex*> vertices() const { return vertices_; }
   const std::vector<RoutingEdge*> edges() const { return edges_; }
 
  private:
+  // The ordered list of vertices making up the path. The edges alone, since
+  // they are undirected, do not yield this directional information.
+  // These vertices are OWNED by RoutingPath.
+  std::vector<RoutingVertex*> vertices_;
+
   // The list of edges. Edge i connected vertices_[j] and vertices_[j+1].
+  // These edges are OWNED by RoutingPath.
   std::vector<RoutingEdge*> edges_;
 };
+
+std::ostream &operator<<(std::ostream &os, const RoutingPath &path);
 
 enum RoutingTrackDirection {
   kTrackHorizontal,
@@ -159,12 +185,21 @@ class RoutingTrack {
       : layer_(layer), direction_(direction), offset_(offset) {}
 
   ~RoutingTrack() {
+    for (RoutingEdge *edge : edges_) { delete edge; }
     for (RoutingTrackBlockage *blockage : blockages_) { delete blockage; }
   }
 
   // Takes ownership of the given pointer.
   void AddEdge(RoutingEdge *edge);
+  bool RemoveEdge(RoutingEdge *edge, bool and_delete);
+
+  // Adds the given vertex to this track, but does not take ownership of it.
+  // Generates an edge from the given vertex to every other vertex in the
+  // track, as long as that edge would not be blocked already.
   void AddVertex(RoutingVertex *vertex);
+
+  // Remove the vertex from this track, and remove any edge that uses it.
+  bool RemoveVertex(RoutingVertex *vertex);
 
   // 
   void MarkEdgeAsUsed(RoutingEdge *edge);
@@ -174,20 +209,25 @@ class RoutingTrack {
 
   std::string Debug() const;
 
+  const std::set<RoutingEdge*> &edges() const { return edges_; }
+
  private:
-  bool IsBlocked(const Point &point) const { return IsBlocked(point, point); }
-  bool IsBlocked(const Point &low_point, const Point &high_point) const;
+  bool IsBlocked(const Point &point) const {
+    return IsBlockedBetween(point, point);
+  }
+  bool IsBlockedBetween(const Point &one_end, const Point &other_end) const;
 
   int64_t ProjectOntoTrack(const Point &point) const;
 
-  void MergeBlockage(
-      const Point &low_point, const Point &high_point);
+  RoutingTrackBlockage *CreateBlockage(const Point &one_end, const Point &other_end);
 
   void SortBlockages();
 
-  // The edges and vertices on this track.
-  // These objects are NOT OWNED by this one.
+  // The edges generated for vertices on this track. These are OWNED by
+  // RoutingTrack.
   std::set<RoutingEdge*> edges_;
+
+  // The vertices on this track. Vertices are NOT OWNED by RoutingTrack.
   std::set<RoutingVertex*> vertices_;
 
   Layer layer_;
@@ -229,7 +269,6 @@ class RoutingGrid {
       }
     }
     for (RoutingPath *path : paths_) { delete path; }
-    for (RoutingEdge *edge : edges_) { delete edge; }
     for (RoutingVertex *vertex : vertices_) { delete vertex; }
   }
 
@@ -246,8 +285,11 @@ class RoutingGrid {
   bool AddRouteBetween(
       const Port &begin, const Port &end);
 
+  void DeleteEdge(RoutingEdge *edge);
+  bool RemoveVertex(RoutingVertex *vertex, bool and_delete);
+
   const std::vector<RoutingPath*> &paths() const { return paths_; }
-  const std::vector<RoutingEdge*> &edges() const { return edges_; }
+  //const std::vector<RoutingEdge*> &edges() const { return edges_; }
   const std::vector<RoutingVertex*> &vertices() const { return vertices_; }
 
  private:
@@ -275,7 +317,7 @@ class RoutingGrid {
   // All installed paths (which we also own).
   std::vector<RoutingPath*> paths_;
 
-  std::vector<RoutingEdge*> edges_;
+  // All owned vertices.
   std::vector<RoutingVertex*> vertices_;
 
   // All routing tracks (we own these).
@@ -285,10 +327,6 @@ class RoutingGrid {
   std::map<Layer, std::vector<RoutingVertex*>> available_vertices_by_layer_;
 
   std::map<Layer, RoutingLayerInfo> layer_infos_;
-
-  // All routing tracks (which we own).
-  std::map<Layer, std::vector<RoutingTrack*>> tracks_;
-
 };
 
 }  // namespace boralago
