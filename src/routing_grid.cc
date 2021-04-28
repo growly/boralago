@@ -415,14 +415,17 @@ std::pair<const RoutingLayerInfo&, const RoutingLayerInfo&>
   const RoutingLayerInfo &rhs_info = physical_db_.GetLayerInfo(rhs);
   if (lhs_info.direction == RoutingTrackDirection::kTrackHorizontal &&
       rhs_info.direction == RoutingTrackDirection::kTrackVertical) {
-    return std::make_pair(lhs_info, rhs_info);
+    return std::pair<const RoutingLayerInfo&, const RoutingLayerInfo&>(
+        lhs_info, rhs_info);
   } else if (lhs_info.direction == RoutingTrackDirection::kTrackVertical &&
              rhs_info.direction == RoutingTrackDirection::kTrackHorizontal) {
-    return std::make_pair(rhs_info, lhs_info);
+    return std::pair<const RoutingLayerInfo&, const RoutingLayerInfo&>(
+        rhs_info, lhs_info);
   }
   LOG(FATAL) << "Exactly one of each layer must be horizontal and one must be"
              << "vertical: " << lhs << ", " << rhs;
-  return std::make_pair(rhs_info, lhs_info);
+  return std::pair<const RoutingLayerInfo&, const RoutingLayerInfo&>(
+      lhs_info, rhs_info);
 }
 
 RoutingVertex *RoutingGrid::GenerateGridVertexForPoint(
