@@ -40,6 +40,7 @@ add_executable(boralago
                 src/renderer.cc
                 src/rectangle.cc
                 src/poly_line_cell.cc
+                src/physical_properties_database.cc
                 src/poly_line_inflator.cc
                 src/routing_grid.cc
                 ${PROTO_SRCS}
