@@ -14,10 +14,23 @@
 #include <absl/strings/str_join.h>
 #include <glog/logging.h>
 
+#include "poly_line.h"
 #include "routing_grid.h"
 #include "rectangle.h"
 
 namespace boralago {
+
+void RoutingEdge::set_track(RoutingTrack *track) {
+  track_ = track;
+  if (track_ != nullptr) set_layer(track_->layer());
+}
+
+const Layer &RoutingEdge::ExplicitOrTrackLayer() const {
+  if (track_ != nullptr)
+    return track_->layer();
+  return layer_;
+}
+
 
 bool RoutingVertex::RemoveEdge(RoutingEdge *edge) {
   return edges_.erase(edge) > 0;
@@ -34,6 +47,47 @@ RoutingPath::RoutingPath(
     vertices_.push_back(next_vertex);
     last = next_vertex;
   }
+}
+
+void RoutingPath::ToPolyLines(
+    const std::map<Layer, RoutingLayerInfo> &layer_info,
+    std::vector<std::unique_ptr<PolyLine>> *polylines) const {
+  if (Empty())
+    return;
+
+  LOG_IF(FATAL, vertices_.size() != edges_.size() + 1)
+      << "There should be one more vertex than there are edges.";
+  std::unique_ptr<PolyLine> last;
+  for (size_t i = 0; i < vertices_.size() - 1; ++i) {
+    RoutingVertex *current = vertices_.at(i);
+    RoutingEdge *edge = edges_.at(i);
+    const Layer &layer = edge->ExplicitOrTrackLayer();
+
+    LOG(INFO) << current->centre() << " " << layer;
+
+    auto it = layer_info.find(layer);
+    LOG_IF(FATAL, it == layer_info.end())
+        << "Layer information for layer " << layer << " not found!";
+    const RoutingLayerInfo &info = it->second;
+
+    if (!last || last->layer() != layer) {
+      if (last) {
+        // This is a change in layer, so we finish the last line and store it.
+        last->AddSegment(current->centre(), info.wire_width);
+        LOG(INFO) << " -> " << current->centre();
+        polylines->push_back(std::move(last));
+      }
+      // Start a new line.
+      last.reset(new PolyLine());
+      last->set_layer(layer);
+      last->set_start(current->centre());
+      LOG(INFO) << "new from " << current->centre();
+      continue;
+    }
+    last->AddSegment(current->centre());
+  }
+  last->AddSegment(vertices_.back()->centre());
+  polylines->push_back(std::move(last));
 }
 
 std::ostream &operator<<(std::ostream &os, const RoutingPath &path) {
@@ -71,6 +125,7 @@ bool RoutingTrack::RemoveEdge(RoutingEdge *edge, bool and_delete) {
   // Remove the edge from the vertices on which it lands.
   edge->first()->RemoveEdge(edge);
   edge->second()->RemoveEdge(edge);
+  edge->set_track(nullptr);
   if (and_delete)
     delete edge;
   return true;
@@ -488,6 +543,7 @@ RoutingVertex *RoutingGrid::GenerateGridVertexForPoint(
     AddVertex(off_grid);
 
     RoutingEdge *edge = new RoutingEdge(bridging_vertex, off_grid);
+    edge->set_layer(layer);
     bridging_vertex->AddEdge(edge);
     off_grid->AddEdge(edge);
     
@@ -530,10 +586,18 @@ int64_t modulo(int64_t a, int64_t b) {
 
 }   // namespace
 
-// TODO(aryap): Do we need to protect against "connect"ing the same layers
-// multiple times?
 void RoutingGrid::ConnectLayers(
-    const Layer &first, const Layer &second, const LayerConnectionInfo &info) {
+    const Layer &lhs, const Layer &rhs, const LayerConnectionInfo &info) {
+  // Order first and second.
+  const Layer &first = lhs <= rhs ? lhs : rhs;
+  const Layer &second = rhs >= lhs ? rhs : lhs;
+  LOG_IF(FATAL,
+      connection_infos_.find(first) == connection_infos_.end() ||
+      connection_infos_[first].find(second) == connection_infos_[first].end())
+      << "Attempt to connection layers " << first << " and " << second
+      << " again.";
+  connection_infos_[first][second] = info;
+
   // One layer has to be horizontal, and one has to be vertical.
   auto split_directions = PickHorizontalAndVertical(first, second);
   RoutingLayerInfo *horizontal_info = split_directions.first;
@@ -791,6 +855,7 @@ RoutingPath *RoutingGrid::ShortestPath(
       // We don't know what direction we're using the edge in, and edges are
       // not directional per se, so pick the side that isn't the one we came in
       // on:
+      // TODO(aryap): Maybe bake this into the RoutingEdge.
       RoutingVertex *next =
           edge->first() == current ? edge->second() : edge->first();
 
@@ -849,6 +914,14 @@ void RoutingGrid::AddTrackToLayer(RoutingTrack *track, const Layer &layer) {
     return;
   }
   it->second.push_back(track);
+}
+
+PolyLineCell *RoutingGrid::CreatePolyLineCell() const {
+  std::unique_ptr<PolyLineCell> cell(new PolyLineCell());
+  for (RoutingPath *path : paths_) {
+    path->ToPolyLines(layer_infos_, &cell->poly_lines());
+  }
+  return cell.release();
 }
 
 } // namespace boralago

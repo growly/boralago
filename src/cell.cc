@@ -24,7 +24,6 @@ const std::pair<Point, Point> Cell::GetBoundingBox() const {
     std::pair<Point, Point> bounding_box = polygon.GetBoundingBox();
     const Point &lower_left = bounding_box.first;
     const Point &upper_right = bounding_box.second;
-    LOG(INFO) << "Child polygon has BB: " << lower_left << " " << upper_right;
     min_x = std::min(lower_left.x(), min_x);
     min_y = std::min(lower_left.y(), min_y);
     max_x = std::max(upper_right.x(), max_x);
@@ -40,11 +39,6 @@ const std::pair<Point, Point> Cell::GetBoundingBox() const {
     max_x = std::max(upper_right.x(), max_x);
     max_y = std::max(upper_right.y(), max_y);
   }
-
-  LOG(INFO) << min_x << ", "
-            << min_y << ", "
-            << max_x << ", "
-            << max_y;
 
   return std::make_pair(Point(min_x, min_y), Point(max_x, max_y));
 }

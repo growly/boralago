@@ -3,6 +3,8 @@
 
 #include "layer.h"
 #include "point.h"
+#include "poly_line.h"
+#include "poly_line_cell.h"
 #include "port.h"
 #include "rectangle.h"
 
@@ -12,6 +14,27 @@
 #include <vector>
 
 namespace boralago {
+
+enum RoutingTrackDirection {
+  kTrackHorizontal,
+  kTrackVertical
+};
+
+struct RoutingLayerInfo {
+  Layer layer;
+  Rectangle area;
+  int64_t wire_width;
+  int64_t offset;
+  RoutingTrackDirection direction;
+  int64_t pitch;
+};
+
+struct LayerConnectionInfo {
+  // Need some measure of cost for connecting between these two layers. Maybe
+  // a function that describes the cost based on something (like length,
+  // sheet resistance).
+  double cost;
+};
 
 class RoutingEdge;
 class RoutingTrack;
@@ -71,7 +94,12 @@ class RoutingVertex {
 class RoutingEdge {
  public:
   RoutingEdge(RoutingVertex *first, RoutingVertex *second)
-    : available_(true), first_(first), second_(second), cost_(1.0) {}
+    : available_(true),
+      track_(nullptr),
+      layer_(0),
+      first_(first),
+      second_(second),
+      cost_(1.0) {}
 
   void set_cost(double cost) { cost_ = cost; }
   double cost() const { return cost_; }
@@ -82,15 +110,21 @@ class RoutingEdge {
   void set_available(bool available) { available_ = available; }
   bool available() { return available_; }
 
+  void set_layer(const Layer &layer) { layer_ = layer; }
+
+  const Layer &ExplicitOrTrackLayer() const;
+
   // Off-grid edges do not have tracks.
-  void set_track(RoutingTrack *track) { track_ = track; }
+  void set_track(RoutingTrack *track);
   RoutingTrack *track() const { return track_; }
 
   std::vector<RoutingVertex*> VertexList() const;
 
  private:
   bool available_;
+
   RoutingTrack *track_;
+  Layer layer_;
 
   RoutingVertex *first_;
   RoutingVertex *second_;
@@ -126,6 +160,10 @@ class RoutingPath {
     return Empty() ? nullptr : vertices_.back();
   }
 
+  void ToPolyLines(
+      const std::map<Layer, RoutingLayerInfo> &layer_info,
+      std::vector<std::unique_ptr<PolyLine>> *poly_lines) const;
+
   bool Empty() const { return edges_.empty(); }
 
   const std::vector<RoutingVertex*> vertices() const { return vertices_; }
@@ -144,16 +182,12 @@ class RoutingPath {
 
 std::ostream &operator<<(std::ostream &os, const RoutingPath &path);
 
-enum RoutingTrackDirection {
-  kTrackHorizontal,
-  kTrackVertical
-};
-
 class RoutingTrackBlockage {
  public:
   RoutingTrackBlockage(int64_t start, int64_t end)
       : start_(start), end_(end) {
-    LOG_IF(FATAL, end_ <= start_) << "RoutingTrackBlockage start must be before end.";
+    LOG_IF(FATAL, end_ <= start_)
+        << "RoutingTrackBlockage start must be before end.";
   }
 
   bool Contains(int64_t position);
@@ -225,6 +259,8 @@ class RoutingTrack {
 
   const std::set<RoutingEdge*> &edges() const { return edges_; }
 
+  const Layer &layer() const { return layer_; }
+
  private:
   bool IsBlocked(const Point &point) const {
     return IsBlockedBetween(point, point);
@@ -258,22 +294,6 @@ class RoutingTrack {
 
 std::ostream &operator<<(std::ostream &os, const RoutingTrack &track);
 
-struct RoutingLayerInfo {
-  Layer layer;
-  Rectangle area;
-  int64_t wire_width;
-  int64_t offset;
-  RoutingTrackDirection direction;
-  int64_t pitch;
-};
-
-struct LayerConnectionInfo {
-  // Need some measure of cost for connecting between these two layers. Maybe
-  // a function that describes the cost based on something (like length,
-  // sheet resistance).
-  double cost;
-};
-
 class RoutingGrid {
  public:
   ~RoutingGrid() {
@@ -295,7 +315,7 @@ class RoutingGrid {
   // horizontal and vertical routing line cross. (The two described layers must
   // be orthogonal in routing direction.)
   void ConnectLayers(
-      const Layer &first, const Layer &second, const LayerConnectionInfo &info);
+      const Layer &lhs, const Layer &rhs, const LayerConnectionInfo &info);
 
   bool AddRouteBetween(
       const Port &begin, const Port &end);
@@ -305,8 +325,13 @@ class RoutingGrid {
   void DeleteEdge(RoutingEdge *edge);
   bool RemoveVertex(RoutingVertex *vertex, bool and_delete);
 
+  // Caller takes ownership.
+  PolyLineCell *CreatePolyLineCell() const;
+
   const std::vector<RoutingPath*> &paths() const { return paths_; }
-  //const std::vector<RoutingEdge*> &edges() const { return edges_; }
+  const std::set<RoutingEdge*> &off_grid_edges() const {
+    return off_grid_edges_;
+  }
   const std::vector<RoutingVertex*> &vertices() const { return vertices_; }
 
  private:
@@ -348,6 +373,11 @@ class RoutingGrid {
   std::map<Layer, std::vector<RoutingVertex*>> available_vertices_by_layer_;
 
   std::map<Layer, RoutingLayerInfo> layer_infos_;
+
+  // Stores the connection info between the ith (first index) and jth (second
+  // index) layers. The "lesser" layer (std::less) should always be used to
+  // index first, so that half of the matrix can be avoided.
+  std::map<Layer, std::map<Layer, LayerConnectionInfo>> connection_infos_;
 };
 
 }  // namespace boralago

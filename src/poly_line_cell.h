@@ -18,6 +18,8 @@ class PolyLineCell {
     return poly_lines_;
   }
 
+  std::vector<std::unique_ptr<PolyLine>> &poly_lines() { return poly_lines_; }
+
   const std::pair<Point, Point> GetBoundingBox() const;
 
  private:
