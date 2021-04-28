@@ -412,6 +412,14 @@ uint64_t RoutingVertex::L1DistanceTo(const Point &point) {
 // TODO(aryap): UGH using make_pair makes a copy of the references?
 // I have to use std::reference_wrapper<const RoutingLayerInfo>?
 // Why don't I just use pointers, exactly?
+//    UGH compare this to the last signature:
+//
+//  std::pair<RoutingLayerInfo*, RoutingLayerInfo*>
+//      RoutingGrid::PickHorizontalAndVertical(
+//          const Layer &lhs, const Layer &rhs) const;
+//
+// And I could even use std::make_pair because it wasn't so smart:
+//  https://stackoverflow.com/questions/53483124/reference-wrapper-make-pair-vs-class-template-argument-deduction-ctad
 std::pair<std::reference_wrapper<const RoutingLayerInfo>,
           std::reference_wrapper<const RoutingLayerInfo>>
     RoutingGrid::PickHorizontalAndVertical(
@@ -606,7 +614,6 @@ void RoutingGrid::ConnectLayers(
   int64_t y_start = y_min + (y_pitch - modulo(y_min - y_offset, y_pitch));
   int64_t y_max = overlap.upper_right().y();
 
-  std::vector<std::vector<RoutingVertex*>> vertex_by_ordinal;
   std::vector<RoutingVertex*> &first_layer_vertices =
       GetAvailableVertices(first);
   std::vector<RoutingVertex*> &second_layer_vertices =
@@ -635,9 +642,6 @@ void RoutingGrid::ConnectLayers(
   // Generate a vertex at the intersection of every horizontal and vertical
   // track.
   for (int64_t x = x_start; x < x_max; x += x_pitch) {
-    vertex_by_ordinal.push_back({});
-    std::vector<RoutingVertex*> &y_vertices = vertex_by_ordinal.back();
-
     // This (and the horizontal one) must exist by now, so we can make this
     // fatal.
     RoutingTrack *vertical_track = vertical_tracks.find(x)->second;
@@ -661,7 +665,6 @@ void RoutingGrid::ConnectLayers(
       VLOG(10) << "Vertex created: " << vertex->centre() << " on layers: "
                << absl::StrJoin(vertex->connected_layers(), ", ");
       // TODO(aryap): Remove these.
-      y_vertices.push_back(vertex);
     }
   }
 
