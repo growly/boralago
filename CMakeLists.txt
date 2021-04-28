@@ -31,18 +31,19 @@ find_library(Skia_LIBRARY
 
 add_executable(boralago
                 src/cell.cc
+                src/instance.cc
                 src/line.cc
                 src/main.cc
+                src/physical_properties_database.cc
                 src/point.cc
                 src/poly_line.cc
-                src/polygon.cc
-                src/instance.cc
-                src/renderer.cc
-                src/rectangle.cc
                 src/poly_line_cell.cc
-                src/physical_properties_database.cc
                 src/poly_line_inflator.cc
+                src/polygon.cc
+                src/rectangle.cc
+                src/renderer.cc
                 src/routing_grid.cc
+                src/via.cc
                 ${PROTO_SRCS}
                 ${PROTO_HDRS})
 

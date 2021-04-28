@@ -13,7 +13,7 @@ std::pair<const Layer&, const Layer&> OrderFirstAndSecondLayers(
     const Layer &lhs, const Layer &rhs) {
   const Layer &first = lhs <= rhs ? lhs : rhs;
   const Layer &second = rhs >= lhs ? rhs : lhs;
-  return std::make_pair(first, second);
+  return std::pair<const Layer&, const Layer&>(first, second);
 }
 
 }   // namespace
@@ -35,35 +35,35 @@ const RoutingLayerInfo &PhysicalPropertiesDatabase::GetLayerInfo(
   return lhs_info_it->second;
 }
 
-void PhysicalPropertiesDatabase::AddInterLayerInfo(
+void PhysicalPropertiesDatabase::AddViaInfo(
     const Layer &lhs,
     const Layer &rhs,
-    const InterLayerInfo &info) {
+    const ViaInfo &info) {
   std::pair<const Layer&, const Layer&> ordered_layers =
       OrderFirstAndSecondLayers(lhs, rhs);
   // Order first and second.
   const Layer &first = ordered_layers.first;
   const Layer &second = ordered_layers.second;
   LOG_IF(FATAL,
-      inter_layer_infos_.find(first) != inter_layer_infos_.end() &&
-      inter_layer_infos_[first].find(second) != inter_layer_infos_[first].end())
-      << "Attempt to specify InterLayerInfo for layers " << first << " and "
+      via_infos_.find(first) != via_infos_.end() &&
+      via_infos_[first].find(second) != via_infos_[first].end())
+      << "Attempt to specify ViaInfo for layers " << first << " and "
       << second << " again.";
-  inter_layer_infos_[first][second] = info;
+  via_infos_[first][second] = info;
 }
 
-const InterLayerInfo &PhysicalPropertiesDatabase::GetInterLayerInfo(
+const ViaInfo &PhysicalPropertiesDatabase::GetViaInfo(
     const Layer &lhs, const Layer &rhs) {
   std::pair<const Layer&, const Layer&> ordered_layers =
       OrderFirstAndSecondLayers(lhs, rhs);
   const Layer &first = ordered_layers.first;
   const Layer &second = ordered_layers.second;
 
-  auto first_it = inter_layer_infos_.find(first);
-  LOG_IF(FATAL, first_it == inter_layer_infos_.end())
+  auto first_it = via_infos_.find(first);
+  LOG_IF(FATAL, first_it == via_infos_.end())
       << "No known connectiion between layer " << first
       << " and layer " << second;
-  std::map<Layer, InterLayerInfo> &inner_map = first_it->second;
+  std::map<Layer, ViaInfo> &inner_map = first_it->second;
   auto second_it = inner_map.find(second);
   LOG_IF(FATAL, second_it == inner_map.end())
       << "No known connectiion between layer " << first

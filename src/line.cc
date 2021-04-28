@@ -36,16 +36,12 @@ bool Line::Intersect(const Line &lhs, const Line &rhs, Point *point) {
     // The left line is vertical.
     double x = static_cast<double>(lhs.end().x());
     double y = rhs.Gradient() * x + rhs.Offset();
-    LOG(INFO) << "lhs is vertical at x = " << x
-              << " rhs crosses at y = " << y;
     *point = Point(static_cast<int64_t>(x), static_cast<int64_t>(y));
     return true;
   } else if (rhs.end().x() == rhs.start().x()) {
     // Only the other line is vertical.
     double x = static_cast<double>(rhs.end().x());
     double y = lhs.Gradient() * x + lhs.Offset();
-    LOG(INFO) << "rhs is vertical at x = " << x
-              << " lhs crosses at y = " << y;
     *point = Point(static_cast<int64_t>(x), static_cast<int64_t>(y));
     return true;
   }
@@ -71,7 +67,6 @@ bool Line::Intersect(const Line &lhs, const Line &rhs, Point *point) {
 
   double x = (c1 - c2)/(m2 - m1);
   double y = m1*x + c1;
-  LOG(INFO) << "intersection: " << x << ", " << y;
   *point = Point(static_cast<int64_t>(x), static_cast<int64_t>(y));
   return true;
 }
@@ -89,7 +84,6 @@ void Line::StretchStart(int64_t dl) {
   double theta = AngleToHorizon();
   double dx = static_cast<double>(dl) * std::cos(theta);
   double dy = static_cast<double>(dl) * std::sin(theta);
-  LOG(INFO) << "theta = " << theta << ", dl = " << dl << ", dx = " << dx << ", dy = " << dy;
   ShiftStart(-dx, -dy);
 }
 
@@ -101,7 +95,6 @@ void Line::StretchEnd(int64_t dl) {
 }
 
 void Line::ShiftStart(int64_t dx, int64_t dy) {
-  LOG(INFO) << " shifting by  " << dx << " " << dy;
   start_.set_x(start_.x() + dx);
   start_.set_y(start_.y() + dy);
 }

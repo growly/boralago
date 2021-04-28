@@ -51,9 +51,10 @@ RoutingPath::RoutingPath(
   }
 }
 
-void RoutingPath::ToPolyLines(
+void RoutingPath::ToPolyLinesAndVias(
     const PhysicalPropertiesDatabase &physical_db,
-    std::vector<std::unique_ptr<PolyLine>> *polylines) const {
+    std::vector<std::unique_ptr<PolyLine>> *polylines,
+    std::vector<std::unique_ptr<Via>> *vias) const {
   if (Empty())
     return;
 
@@ -65,22 +66,23 @@ void RoutingPath::ToPolyLines(
     RoutingEdge *edge = edges_.at(i);
     const Layer &layer = edge->ExplicitOrTrackLayer();
 
-    LOG(INFO) << current->centre() << " " << layer;
-
     const RoutingLayerInfo &info = physical_db.GetLayerInfo(layer);
 
     if (!last || last->layer() != layer) {
+      Via *via = nullptr;
       if (last) {
         // This is a change in layer, so we finish the last line and store it.
         last->AddSegment(current->centre(), info.wire_width);
-        LOG(INFO) << " -> " << current->centre();
+        via = new Via(current->centre(), last->layer(), layer);
+        vias->emplace_back(via);
+        last->set_end_via(via);
         polylines->push_back(std::move(last));
       }
       // Start a new line.
       last.reset(new PolyLine());
       last->set_layer(layer);
       last->set_start(current->centre());
-      LOG(INFO) << "new from " << current->centre();
+      last->set_start_via(via);
       continue;
     }
     last->AddSegment(current->centre());
@@ -899,7 +901,7 @@ void RoutingGrid::AddTrackToLayer(RoutingTrack *track, const Layer &layer) {
 PolyLineCell *RoutingGrid::CreatePolyLineCell() const {
   std::unique_ptr<PolyLineCell> cell(new PolyLineCell());
   for (RoutingPath *path : paths_) {
-    path->ToPolyLines(physical_db_, &cell->poly_lines());
+    path->ToPolyLinesAndVias(physical_db_, &cell->poly_lines(), &cell->vias());
   }
   return cell.release();
 }

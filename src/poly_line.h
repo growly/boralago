@@ -6,6 +6,7 @@
 #include "line_segment.h"
 #include "point.h"
 #include "shape.h"
+#include "via.h"
 
 namespace boralago {
 
@@ -24,6 +25,12 @@ class PolyLine : public Shape {
 
   const std::pair<Point, Point> GetBoundingBox() const override;
 
+  void AddSegment(const Point &point) {
+    AddSegment(point, 0);
+  }
+
+  void AddSegment(const Point &to, const uint64_t width);
+
   void set_start(const Point &start) { start_ = start; }
   const Point &start() const { return start_; }
 
@@ -33,11 +40,10 @@ class PolyLine : public Shape {
   uint64_t overhang_end() const { return overhang_end_; }
   void set_overhang_end(uint64_t overhang) { overhang_end_ = overhang; }
 
-  void AddSegment(const Point &point) {
-    AddSegment(point, 0);
-  }
-
-  void AddSegment(const Point &to, const uint64_t width);
+  Via *start_via() const { return start_via_; }
+  void set_start_via(Via *via) { start_via_ = via; }
+  Via *end_via() const { return end_via_; }
+  void set_end_via(Via *via) { end_via_ = via; }
 
   const std::vector<LineSegment> &segments() const { return segments_; }
 
@@ -47,6 +53,15 @@ class PolyLine : public Shape {
   // How much to extend the line over the start/end segments.
   uint64_t overhang_start_;
   uint64_t overhang_end_;
+
+  // TODO(aryap): I can't figure out where to put this. This isn't exactly a
+  // general solution - what about vias that connect part way through a
+  // PolyLine? It seems that that problem is far more general and probably can
+  // be avoided. At the very least, though, we need some way of making sure
+  // that the inflated PolyLine satisfies the layout constraints of connecting
+  // to vias at the start or end.
+  Via *start_via_;
+  Via *end_via_;
 
   std::vector<LineSegment> segments_;
 };

@@ -140,9 +140,10 @@ class RoutingPath {
     return Empty() ? nullptr : vertices_.back();
   }
 
-  void ToPolyLines(
+  void ToPolyLinesAndVias(
       const PhysicalPropertiesDatabase &physical_db,
-      std::vector<std::unique_ptr<PolyLine>> *poly_lines) const;
+      std::vector<std::unique_ptr<PolyLine>> *poly_lines,
+      std::vector<std::unique_ptr<Via>> *vias) const;
 
   bool Empty() const { return edges_.empty(); }
 
@@ -312,6 +313,8 @@ class RoutingGrid {
     return off_grid_edges_;
   }
   const std::vector<RoutingVertex*> &vertices() const { return vertices_; }
+
+  const PhysicalPropertiesDatabase &physical_db() const { return physical_db_; }
 
  private:
   RoutingLayerInfo *FindRoutingInfoOrDie(const Layer &layer);

@@ -43,13 +43,26 @@ class Renderer {
       const std::string &filename);
 
  private:
+  static const Point kNoOffset;
+
   void DrawPolyLineCell(const PolyLineCell &poly_line_cell, SkCanvas *canvas);
+  void DrawCell(const Cell &cell, const Point &offset, SkCanvas *canvas);
+  void DrawRoutingGrid(const RoutingGrid &grid, SkCanvas *canvas);
+
+  void DrawPolyLine(
+      const PolyLine &poly_line, const Point &offset, SkCanvas *canvas);
+  void DrawPolygon(
+      const Polygon &polygon, const Point &offset, SkCanvas *canvas);
+  void DrawRectangle(
+      const Rectangle &rectangle, const Point &offset, SkCanvas *canvas);
+  void DrawPort(
+      const Port &port, const Point &offset, SkCanvas *canvas);
+  void DrawVia(
+      const Via &via, const Point &offset, SkCanvas *canvas);
+
   void DrawPoint(
       const Point &point, uint64_t width, uint64_t height,
       const SkPaint &up_paint, const SkPaint &down_paint, SkCanvas *canvas);
-  void DrawPort(const Port &port, SkCanvas *canvas);
-  void DrawRoutingGrid(const RoutingGrid &grid, SkCanvas *canvas);
-  void DrawCell(const Cell &cell, const Point &offset, SkCanvas *canvas);
 
   SkPoint MapToSkPoint(const Point &point);
   SkPoint MapToSkPoint(const Point &point, const Point &offset);

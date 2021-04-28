@@ -14,12 +14,6 @@
 
 namespace boralago {
 
-PolyLineInflator::PolyLineInflator(const InflatorRules &rules) {
-  for (const auto &rules : rules.layer_rules()) {
-    LOG(INFO) << "LOL";
-  }
-}
-
 Cell PolyLineInflator::Inflate(const PolyLineCell &poly_line_cell) {
   Cell cell;
   for (const auto &poly_line : poly_line_cell.poly_lines()) {
@@ -31,7 +25,26 @@ Cell PolyLineInflator::Inflate(const PolyLineCell &poly_line_cell) {
     LOG(INFO) << polygon << " bounded by ll= " << bb.first << " ur= " << bb.second;
     cell.AddPolygon(polygon);
   }
+  for (const auto &via : poly_line_cell.vias()) {
+    Rectangle rectangle;
+    InflateVia(*via, &rectangle);
+    cell.AddRectangle(rectangle);
+  }
   return cell;
+}
+
+void PolyLineInflator::InflateVia(const Via &via, Rectangle *rectangle) {
+  LOG(INFO) << via;
+  const ViaInfo &via_info = physical_db_.GetViaInfo(via);
+  LOG_IF(FATAL, via_info.width == 0) << "Cannot create 0-width via.";
+  LOG_IF(FATAL, via_info.height == 0) << "Cannot create 0-height via.";
+
+  uint64_t half_width = via_info.width / 2;
+  uint64_t half_height = via_info.height / 2;
+  *rectangle = Rectangle(via.centre() - Point(half_width, half_height),
+                         via_info.width,
+                         via_info.height);
+  rectangle->set_layer(via_info.layer);
 }
 
 // So, you could do this in one pass by inflating every central poly_line into its
@@ -63,12 +76,12 @@ Cell PolyLineInflator::Inflate(const PolyLineCell &poly_line_cell) {
 //   /
 //
 // The more naive (and simple) way seems to be to walk down the segments in one
-// direction and then back in the other. Treating them as vectors we can either
-// keep track of the direction we're going in or reverse the start/end
-// positions to reverse the vector itself. In either case, we take care to
-// generate the shifted line in the same position relative to all vectors.
-// sin/cos will do this for us if we compute the angle the vector makes to the
-// positive x-axis correctly:
+// direction and then back in the other. This is still O(n). Treating them as
+// vectors we can either keep track of the direction we're going in or reverse
+// the start/end positions to reverse the vector itself. In either case, we
+// take care to generate the shifted line in the same position relative to all
+// vectors. sin/cos will do this for us if we compute the angle the vector
+// makes to the positive x-axis correctly:
 //                                   __
 //                                  /  \
 //        _ shifted vector      theta _|_______
@@ -78,9 +91,9 @@ Cell PolyLineInflator::Inflate(const PolyLineCell &poly_line_cell) {
 //     /   /                      /   /
 //    /   /                      /   /
 //   /   /                      /   / shifted vector
-//  /   /\ theta            + |/_  /
-//     /_|_____             +    |/_ 
-//                          +
+//  /   /\ theta          +-> |/_  /
+//     /_|_____           |      |/_ 
+//                        |
 //                        original vector, reversed
 //
 void PolyLineInflator::InflatePolyLine(const PolyLine &polyline, Polygon *polygon) {
@@ -101,12 +114,24 @@ void PolyLineInflator::InflatePolyLine(const PolyLine &polyline, Polygon *polygo
 
     // Stretch the start of the start, or end of the end segments according to
     // policy:
-    if (i == 0 && polyline.overhang_start() > 0) {
-      LOG(INFO) << "Computing pre-overhang";
-      line.StretchStart(polyline.overhang_start());
+    if (i == 0) {
+      if (polyline.start_via() != nullptr) {
+        const ViaInfo &via_info = physical_db_.GetViaInfo(*polyline.start_via());
+        // TODO(aryap): This depends on the orientation of the starting segment.
+        uint64_t via_length = std::max(via_info.width, via_info.height);
+        line.StretchStart(via_length / 2 + via_info.overhang);
+      } else if (polyline.overhang_start() > 0) {
+        line.StretchStart(polyline.overhang_start());
+      }
     }
-    if (i == polyline.segments().size() - 1 && polyline.overhang_end() > 0) {
-      line.StretchEnd(polyline.overhang_end());
+    if (i == polyline.segments().size() - 1) {
+      if (polyline.end_via() != nullptr) {
+        const ViaInfo &via_info = physical_db_.GetViaInfo(*polyline.end_via());
+        uint64_t via_length = std::max(via_info.width, via_info.height);
+        line.StretchEnd(via_length / 2 + via_info.overhang);
+      } else if (polyline.overhang_end() > 0) {
+        line.StretchEnd(polyline.overhang_end());
+      }
     }
 
     // AnchorPosition growth_anchor;
@@ -132,7 +157,7 @@ void PolyLineInflator::InflatePolyLine(const PolyLine &polyline, Polygon *polygo
   polygon->AddVertex(last_shifted_line->end());
 
   last_shifted_line = nullptr;
-  // TODO(aryap): lmao if you use size_t here it underflows and never breaks
+  // TODO(aryap): lmao if you use size_t here it underflows and never exits
   // the loop.
   for (int i = line_stack.size() - 1; i >= 0; --i) {
     Line &line = line_stack.at(i);

@@ -30,6 +30,36 @@ int main(int argc, char **argv) {
   LOG(INFO) << "Boralago " << boralago_VERSION_MAJOR << "." << boralago_VERSION_MINOR
             << std::endl;
 
+  // Some process "properties".
+  boralago::RoutingLayerInfo layer_1;
+  layer_1.layer = 4;
+  layer_1.area = boralago::Rectangle(boralago::Point(0, 0), 1000, 1000);
+  layer_1.wire_width = 50;
+  layer_1.offset = 50;
+  layer_1.pitch = 100;
+  layer_1.direction = boralago::RoutingTrackDirection::kTrackVertical;
+
+  boralago::RoutingLayerInfo layer_2;
+  layer_2.layer = 5;
+  layer_2.area = boralago::Rectangle(boralago::Point(0, 0), 1000, 1000);
+  layer_2.wire_width = 50;
+  layer_2.offset = 50;
+  layer_2.pitch = 100;
+  layer_2.direction = boralago::RoutingTrackDirection::kTrackHorizontal;
+
+  boralago::ViaInfo layer_1_2;
+  layer_1_2.cost = 1.0;
+  layer_1_2.width = 30;
+  layer_1_2.height = 30;
+  layer_1_2.overhang = 10;
+
+  boralago::PhysicalPropertiesDatabase physical_db;
+  physical_db.AddLayer(layer_1);
+  physical_db.AddLayer(layer_2);
+  physical_db.AddViaInfo(layer_1.layer, layer_2.layer, layer_1_2);
+
+
+  // A dummy cell.
   boralago::PolyLineCell inverter;
   boralago::PolyLine *poly = inverter.AddPolyLine();
   poly->set_layer(3);
@@ -53,8 +83,8 @@ int main(int argc, char **argv) {
   other_region->set_start({0, 150});
   other_region->AddSegment({0, 250}, 10);
 
-  boralago::InflatorRules rules;
-  boralago::PolyLineInflator inflator(rules);
+  //boralago::InflatorRules rules;
+  boralago::PolyLineInflator inflator(physical_db);
 
   // Ownership: Something owns the cells, and cells don't own each other. A
   // cell library?
@@ -76,29 +106,6 @@ int main(int argc, char **argv) {
   // }
 
   // Create a routing grid.
-  boralago::RoutingLayerInfo layer_1;
-  layer_1.layer = 4;
-  layer_1.area = boralago::Rectangle(boralago::Point(0, 0), 1000, 1000);
-  layer_1.wire_width = 50;
-  layer_1.offset = 50;
-  layer_1.pitch = 100;
-  layer_1.direction = boralago::RoutingTrackDirection::kTrackVertical;
-
-  boralago::RoutingLayerInfo layer_2;
-  layer_2.layer = 5;
-  layer_2.area = boralago::Rectangle(boralago::Point(0, 0), 1000, 1000);
-  layer_2.wire_width = 50;
-  layer_2.offset = 50;
-  layer_2.pitch = 100;
-  layer_2.direction = boralago::RoutingTrackDirection::kTrackHorizontal;
-
-  boralago::PhysicalPropertiesDatabase physical_db;
-  physical_db.AddLayer(layer_1);
-  physical_db.AddLayer(layer_2);
-
-  boralago::InterLayerInfo layer_1_2;
-  layer_1_2.cost = 1.0;
-  physical_db.AddInterLayerInfo(layer_1.layer, layer_2.layer, layer_1_2);
 
   boralago::RoutingGrid grid(physical_db);
   grid.ConnectLayers(layer_1.layer, layer_2.layer);

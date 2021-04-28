@@ -7,22 +7,25 @@
 #include <unordered_map>
 
 #include "cell.h"
-#include "point.h"
+#include "physical_properties_database.h"
 #include "line.h"
-#include "polygon.h"
+#include "point.h"
 #include "poly_line.h"
 #include "poly_line_cell.h"
-#include "inflator_rules.pb.h"
+#include "polygon.h"
+#include "via.h"
 
 namespace boralago {
 
 class PolyLineInflator {
  public:
-  PolyLineInflator(const InflatorRules &rules);
+  PolyLineInflator(const PhysicalPropertiesDatabase &physical_db)
+      : physical_db_(physical_db) {}
 
   // Return a laid-out version of the poly_line diagram.
   Cell Inflate(const PolyLineCell &poly_line_cell);
 
+  void InflateVia(const Via &via, Rectangle *rectangle);
   void InflatePolyLine(const PolyLine &line, Polygon *polygon);
 
  private:
@@ -46,7 +49,8 @@ class PolyLineInflator {
     const Line &next_source, double width, Line *last_shifted_line,
     Polygon *polygon);
 
-  std::unordered_map<uint64_t, InflatorRules> rules_by_layer_;
+  // Provides some defaults and rules.
+  PhysicalPropertiesDatabase physical_db_;
 };
 
 }  // namespace boralago

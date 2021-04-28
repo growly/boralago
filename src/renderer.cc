@@ -21,6 +21,8 @@
 
 namespace boralago {
 
+const Point Renderer::kNoOffset = Point(0, 0);
+
 SkPoint Renderer::MapToSkPoint(const Point &point) {
   return MapToSkPoint(point, Point(0, 0));
 }
@@ -77,17 +79,13 @@ const SkPaint &Renderer::GetLayerPaint(int64_t layer) {
 }
 
 void Renderer::DrawPolyLineCell(const PolyLineCell &poly_line_cell, SkCanvas *canvas) {
-  //const SkScalar scale = 256.0f;
-  //canvas->translate(0.5f * scale, 0.5f * scale);
   for (const auto &poly_line : poly_line_cell.poly_lines()) {
-    const SkPaint &paint = GetLayerPaint(poly_line->layer()); 
-    SkPath path;
-    path.moveTo(MapToSkPoint(poly_line->start()));
-    for (const auto &segment : poly_line->segments()) {
-      path.lineTo(MapToSkPoint(segment.end));
-    }
-    // path.close();
-    canvas->drawPath(path, paint);
+    DrawPolyLine(*poly_line, kNoOffset, canvas);
+  }
+
+  LOG(INFO) << "there are this many vias: " << poly_line_cell.vias().size();
+  for (const auto &via : poly_line_cell.vias()) {
+    DrawVia(*via, kNoOffset, canvas);
   }
 }
 
@@ -108,27 +106,72 @@ void Renderer::DrawPoint(
   canvas->drawLine(upper_left, lower_right, down_paint);
 }
 
+void Renderer::DrawPolyLine(
+    const PolyLine &poly_line, const Point &offset, SkCanvas *canvas) {
+  const SkPaint &paint = GetLayerPaint(poly_line.layer()); 
+  SkPath path;
+  path.moveTo(MapToSkPoint(poly_line.start(), offset));
+  for (const auto &segment : poly_line.segments()) {
+    path.lineTo(MapToSkPoint(segment.end, offset));
+  }
+  canvas->drawPath(path, paint);
+}
+
+void Renderer::DrawPolygon(
+    const Polygon &polygon, const Point &offset, SkCanvas *canvas) {
+  const SkPaint &paint = GetLayerPaint(polygon.layer());
+  SkPath path;
+  path.moveTo(MapToSkPoint(polygon.vertices().front(), offset));
+  for (size_t i = 1; i < polygon.vertices().size(); ++i) {
+    path.lineTo(MapToSkPoint(polygon.vertices().at(i), offset));
+  }
+  path.close();
+  canvas->drawPath(path, paint);
+}
+
 // This is actually the same as drawing a rectangle.
-void Renderer::DrawPort(const Port &port, SkCanvas *canvas) {
-  SkPoint lower_left = MapToSkPoint(port.lower_left());
-  SkPoint upper_right = MapToSkPoint(port.upper_right());
+void Renderer::DrawPort(const Port &port, const Point &offset, SkCanvas *canvas) {
+  SkPoint lower_left = MapToSkPoint(port.lower_left(), offset);
+  SkPoint upper_right = MapToSkPoint(port.upper_right(), offset);
   SkRect rectangle = SkRect::MakeLTRB(
       lower_left.x(), upper_right.y(), upper_right.x(), lower_left.y());
   const SkPaint &paint = GetLayerPaint(port.layer());
   canvas->drawRect(rectangle, paint);
 }
 
+void Renderer::DrawRectangle(
+    const Rectangle &rectangle, const Point &offset, SkCanvas *canvas) {
+  SkPoint lower_left = MapToSkPoint(rectangle.lower_left(), offset);
+  SkPoint upper_right = MapToSkPoint(rectangle.upper_right(), offset);
+  SkRect sk_rect = SkRect::MakeLTRB(
+      lower_left.x(), upper_right.y(), upper_right.x(), lower_left.y());
+  const SkPaint &paint = GetLayerPaint(rectangle.layer());
+  canvas->drawRect(sk_rect, paint);
+}
+
+void Renderer::DrawVia(
+    const Via &via, const Point &offset, SkCanvas *canvas) {
+  static const double kViaHeight = 15;
+  static const double kViaWidth = 15;
+
+  const SkPaint &bottom_paint = GetLayerPaint(via.bottom_layer());
+  const SkPaint &top_paint = GetLayerPaint(via.top_layer());
+  DrawPoint(via.centre() + offset,
+            kViaHeight,
+            kViaWidth,
+            bottom_paint,
+            top_paint,
+            canvas);
+}
+
 void Renderer::DrawCell(
     const Cell &cell, const Point &offset, SkCanvas *canvas) {
   for (const auto &polygon : cell.polygons()) {
-    const SkPaint &paint = GetLayerPaint(polygon.layer());
-    SkPath path;
-    path.moveTo(MapToSkPoint(polygon.vertices().front(), offset));
-    for (size_t i = 1; i < polygon.vertices().size(); ++i) {
-      path.lineTo(MapToSkPoint(polygon.vertices().at(i), offset));
-    }
-    path.close();
-    canvas->drawPath(path, paint);
+    DrawPolygon(polygon, offset, canvas);
+  }
+
+  for (const auto &rectangle : cell.rectangles()) {
+    DrawRectangle(rectangle, offset, canvas);
   }
 
   // Draw cell boundary.
@@ -182,20 +225,18 @@ void Renderer::DrawRoutingGrid(
   // Draw paths.
   LOG(INFO) << "Grid has " << grid.paths().size() << " paths.";
   for (RoutingPath *path : grid.paths()) {
-    SkPath sk_path;
-    RoutingVertex *first = path->vertices().front();
-    sk_path.moveTo(MapToSkPoint(first->centre()));
-    for (auto iter = std::next(path->vertices().begin());
-         iter != path->vertices().end(); ++iter) {
-      sk_path.lineTo(MapToSkPoint((*iter)->centre()));
+    std::vector<std::unique_ptr<PolyLine>> poly_lines;
+    std::vector<std::unique_ptr<Via>> vias;
+
+    path->ToPolyLinesAndVias(grid.physical_db(),
+                             &poly_lines,
+                             &vias);
+    for (const auto &poly_line : poly_lines) {
+      DrawPolyLine(*poly_line, kNoOffset, canvas);
     }
-
-    // TODO(aryap): Actually you want each edge to have its layer colour...
-    SkPaint path_paint;
-    path_paint.setStyle(SkPaint::kStroke_Style);
-    path_paint.setColor(SkColors::kRed);
-
-    canvas->drawPath(sk_path, path_paint);
+    for (const auto &via : vias) {
+      DrawVia(*via, kNoOffset, canvas);
+    }
   }
 }
 
@@ -224,7 +265,7 @@ void Renderer::RenderToPNG(
   SkCanvas* raster_canvas = raster_surface->getCanvas();
 
   raster_canvas->clear(SK_ColorWHITE);
-  DrawCell(cell, Point(0, 0), raster_canvas);
+  DrawCell(cell, kNoOffset, raster_canvas);
 
   sk_sp<SkImage> image(raster_surface->makeImageSnapshot());
   if (!image) { return; }
@@ -248,7 +289,7 @@ void Renderer::RenderToPNG(
   raster_canvas->clear(SK_ColorWHITE);
   //raster_canvas->translate(200.0f, -200.0f);
   DrawPolyLineCell(poly_line_cell, raster_canvas);
-  DrawCell(cell, Point(0, 0), raster_canvas);
+  DrawCell(cell, kNoOffset, raster_canvas);
   DrawRoutingGrid(grid, raster_canvas);
 
   sk_sp<SkImage> image(raster_surface->makeImageSnapshot());
