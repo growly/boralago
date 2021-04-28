@@ -14,6 +14,7 @@
 #include <absl/strings/str_join.h>
 #include <glog/logging.h>
 
+#include "physical_properties_database.h"
 #include "poly_line.h"
 #include "routing_grid.h"
 #include "rectangle.h"
@@ -50,7 +51,7 @@ RoutingPath::RoutingPath(
 }
 
 void RoutingPath::ToPolyLines(
-    const std::map<Layer, RoutingLayerInfo> &layer_info,
+    const PhysicalPropertiesDatabase &physical_db,
     std::vector<std::unique_ptr<PolyLine>> *polylines) const {
   if (Empty())
     return;
@@ -65,10 +66,7 @@ void RoutingPath::ToPolyLines(
 
     LOG(INFO) << current->centre() << " " << layer;
 
-    auto it = layer_info.find(layer);
-    LOG_IF(FATAL, it == layer_info.end())
-        << "Layer information for layer " << layer << " not found!";
-    const RoutingLayerInfo &info = it->second;
+    const RoutingLayerInfo &info = physical_db.GetLayerInfo(layer);
 
     if (!last || last->layer() != layer) {
       if (last) {
@@ -409,41 +407,22 @@ uint64_t RoutingVertex::L1DistanceTo(const Point &point) {
   return std::abs(dx) + std::abs(dy);
 }
 
-void RoutingGrid::DescribeLayer(
-    const RoutingLayerInfo &info) {
-  const Layer &layer = info.layer;
-  auto layer_info_it = layer_infos_.find(layer);
-  if (layer_info_it != layer_infos_.end()) {
-    LOG(FATAL) << "Duplicate layer: " << layer;
-  }
-  layer_infos_.insert({layer, info});
-}
-
-RoutingLayerInfo *RoutingGrid::FindRoutingInfoOrDie(const Layer &layer) {
-  auto lhs_info_it = layer_infos_.find(layer);
-  if (lhs_info_it == layer_infos_.end()) {
-    LOG(FATAL) << "Could not find info for layer: " << layer;
-  }
-  return &lhs_info_it->second;
-}
-
 // Return the (horizontal, vertical) routing infos.
-std::pair<RoutingLayerInfo*, RoutingLayerInfo*>
+std::pair<const RoutingLayerInfo&, const RoutingLayerInfo&>
     RoutingGrid::PickHorizontalAndVertical(
-    const Layer &lhs, const Layer &rhs) {
-  RoutingLayerInfo *lhs_info = FindRoutingInfoOrDie(lhs);
-  RoutingLayerInfo *rhs_info = FindRoutingInfoOrDie(rhs);
-  if (lhs_info->direction == RoutingTrackDirection::kTrackHorizontal &&
-      rhs_info->direction == RoutingTrackDirection::kTrackVertical) {
+        const Layer &lhs, const Layer &rhs) const {
+  const RoutingLayerInfo &lhs_info = physical_db_.GetLayerInfo(lhs);
+  const RoutingLayerInfo &rhs_info = physical_db_.GetLayerInfo(rhs);
+  if (lhs_info.direction == RoutingTrackDirection::kTrackHorizontal &&
+      rhs_info.direction == RoutingTrackDirection::kTrackVertical) {
     return std::make_pair(lhs_info, rhs_info);
-  } else if (lhs_info->direction == RoutingTrackDirection::kTrackVertical &&
-             rhs_info->direction == RoutingTrackDirection::kTrackHorizontal) {
+  } else if (lhs_info.direction == RoutingTrackDirection::kTrackVertical &&
+             rhs_info.direction == RoutingTrackDirection::kTrackHorizontal) {
     return std::make_pair(rhs_info, lhs_info);
-  } else {
-    LOG(FATAL) << "Exactly one of each layer must be horizontal and one must be"
-               << "vertical: " << lhs << ", " << rhs;
   }
-  return std::pair<RoutingLayerInfo*, RoutingLayerInfo*>(nullptr, nullptr);
+  LOG(FATAL) << "Exactly one of each layer must be horizontal and one must be"
+             << "vertical: " << lhs << ", " << rhs;
+  return std::make_pair(rhs_info, lhs_info);
 }
 
 RoutingVertex *RoutingGrid::GenerateGridVertexForPoint(
@@ -587,26 +566,16 @@ int64_t modulo(int64_t a, int64_t b) {
 }   // namespace
 
 void RoutingGrid::ConnectLayers(
-    const Layer &lhs, const Layer &rhs, const LayerConnectionInfo &info) {
-  // Order first and second.
-  const Layer &first = lhs <= rhs ? lhs : rhs;
-  const Layer &second = rhs >= lhs ? rhs : lhs;
-  LOG_IF(FATAL,
-      connection_infos_.find(first) == connection_infos_.end() ||
-      connection_infos_[first].find(second) == connection_infos_[first].end())
-      << "Attempt to connection layers " << first << " and " << second
-      << " again.";
-  connection_infos_[first][second] = info;
-
+    const Layer &first, const Layer &second) {
   // One layer has to be horizontal, and one has to be vertical.
   auto split_directions = PickHorizontalAndVertical(first, second);
-  RoutingLayerInfo *horizontal_info = split_directions.first;
-  RoutingLayerInfo *vertical_info = split_directions.second;
+  const RoutingLayerInfo &horizontal_info = split_directions.first;
+  const RoutingLayerInfo &vertical_info = split_directions.second;
 
   // Determine the area over which the grid is valid.
-  Rectangle overlap = horizontal_info->area.OverlapWith(vertical_info->area);
-  LOG(INFO) << "Drawing grid between layers " << horizontal_info->layer << ", "
-            << vertical_info->layer << " over " << overlap;
+  Rectangle overlap = horizontal_info.area.OverlapWith(vertical_info.area);
+  LOG(INFO) << "Drawing grid between layers " << horizontal_info.layer << ", "
+            << vertical_info.layer << " over " << overlap;
   
   //                      x_min v   v x_start
   //           |      |      |  +   |      |
@@ -617,14 +586,14 @@ void RoutingGrid::ConnectLayers(
   //  O -----> | ---> | ---> | -+-> | ---> |
   //    offset   pitch          ^ start of grid boundary
   //
-  int64_t x_offset = horizontal_info->offset;
-  int64_t x_pitch = horizontal_info->pitch;
+  int64_t x_offset = horizontal_info.offset;
+  int64_t x_pitch = horizontal_info.pitch;
   int64_t x_min = overlap.lower_left().x();
   int64_t x_start = x_min + (x_pitch - modulo(x_min - x_offset, x_pitch));
   int64_t x_max = overlap.upper_right().x();
   
-  int64_t y_offset = vertical_info->offset;
-  int64_t y_pitch = vertical_info->pitch;
+  int64_t y_offset = vertical_info.offset;
+  int64_t y_pitch = vertical_info.pitch;
   int64_t y_min = overlap.lower_left().y();
   int64_t y_start = y_min + (y_pitch - modulo(y_min - y_offset, y_pitch));
   int64_t y_max = overlap.upper_right().y();
@@ -643,16 +612,16 @@ void RoutingGrid::ConnectLayers(
   // Generate tracks to hold edges and vertices in each direction.
   for (int64_t x = x_start; x < x_max; x += x_pitch) {
     RoutingTrack *track = new RoutingTrack(
-        vertical_info->layer, RoutingTrackDirection::kTrackVertical, x);
+        vertical_info.layer, RoutingTrackDirection::kTrackVertical, x);
     vertical_tracks.insert({x, track});
-    AddTrackToLayer(track, vertical_info->layer);
+    AddTrackToLayer(track, vertical_info.layer);
   }
 
   for (int64_t y = y_start; y < y_max; y += y_pitch) {
     RoutingTrack *track = new RoutingTrack(
-        horizontal_info->layer, RoutingTrackDirection::kTrackHorizontal, y);
+        horizontal_info.layer, RoutingTrackDirection::kTrackHorizontal, y);
     horizontal_tracks.insert({y, track});
-    AddTrackToLayer(track, horizontal_info->layer);
+    AddTrackToLayer(track, horizontal_info.layer);
   }
 
   // Generate a vertex at the intersection of every horizontal and vertical
@@ -919,7 +888,7 @@ void RoutingGrid::AddTrackToLayer(RoutingTrack *track, const Layer &layer) {
 PolyLineCell *RoutingGrid::CreatePolyLineCell() const {
   std::unique_ptr<PolyLineCell> cell(new PolyLineCell());
   for (RoutingPath *path : paths_) {
-    path->ToPolyLines(layer_infos_, &cell->poly_lines());
+    path->ToPolyLines(physical_db_, &cell->poly_lines());
   }
   return cell.release();
 }

@@ -12,6 +12,7 @@
 
 #include "c_make_header.h"
 
+#include "physical_properties_database.h"
 #include "routing_grid.h"
 #include "renderer.h"
 #include "rectangle.h"
@@ -91,14 +92,16 @@ int main(int argc, char **argv) {
   layer_2.pitch = 100;
   layer_2.direction = boralago::RoutingTrackDirection::kTrackHorizontal;
 
-  boralago::RoutingGrid grid;
-  grid.DescribeLayer(layer_1);
-  grid.DescribeLayer(layer_2);
+  boralago::PhysicalPropertiesDatabase physical_db;
+  physical_db.AddLayer(layer_1);
+  physical_db.AddLayer(layer_2);
 
-  boralago::LayerConnectionInfo layer_1_2;
+  boralago::InterLayerInfo layer_1_2;
   layer_1_2.cost = 1.0;
-  grid.ConnectLayers(layer_1.layer, layer_2.layer, layer_1_2);
+  physical_db.AddInterLayerInfo(layer_1.layer, layer_2.layer, layer_1_2);
 
+  boralago::RoutingGrid grid(physical_db);
+  grid.ConnectLayers(layer_1.layer, layer_2.layer);
 
   // Make up ports for test.
   boralago::Port a(boralago::Point(150, 150), 50, 50, 4, "VDD");

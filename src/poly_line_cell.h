@@ -24,6 +24,7 @@ class PolyLineCell {
 
  private:
   std::vector<std::unique_ptr<PolyLine>> poly_lines_;
+  //std::vector<std::unique_ptr<Via>> vias_;
 };
 
 }  // namespace boralago

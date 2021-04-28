@@ -2,6 +2,7 @@
 #define ROUTING_GRID_H_
 
 #include "layer.h"
+#include "physical_properties_database.h"
 #include "point.h"
 #include "poly_line.h"
 #include "poly_line_cell.h"
@@ -14,27 +15,6 @@
 #include <vector>
 
 namespace boralago {
-
-enum RoutingTrackDirection {
-  kTrackHorizontal,
-  kTrackVertical
-};
-
-struct RoutingLayerInfo {
-  Layer layer;
-  Rectangle area;
-  int64_t wire_width;
-  int64_t offset;
-  RoutingTrackDirection direction;
-  int64_t pitch;
-};
-
-struct LayerConnectionInfo {
-  // Need some measure of cost for connecting between these two layers. Maybe
-  // a function that describes the cost based on something (like length,
-  // sheet resistance).
-  double cost;
-};
 
 class RoutingEdge;
 class RoutingTrack;
@@ -161,7 +141,7 @@ class RoutingPath {
   }
 
   void ToPolyLines(
-      const std::map<Layer, RoutingLayerInfo> &layer_info,
+      const PhysicalPropertiesDatabase &physical_db,
       std::vector<std::unique_ptr<PolyLine>> *poly_lines) const;
 
   bool Empty() const { return edges_.empty(); }
@@ -296,6 +276,9 @@ std::ostream &operator<<(std::ostream &os, const RoutingTrack &track);
 
 class RoutingGrid {
  public:
+  RoutingGrid(const PhysicalPropertiesDatabase &physical_db)
+      : physical_db_(physical_db) {}
+
   ~RoutingGrid() {
     for (auto entry : tracks_by_layer_) {
       for (RoutingTrack *track : entry.second) {
@@ -307,15 +290,11 @@ class RoutingGrid {
     for (RoutingVertex *vertex : vertices_) { delete vertex; }
   }
 
-  // Stage the description of a layer that's usable for routing.
-  void DescribeLayer(const RoutingLayerInfo &info);
-
   // Connecting two layers generates the graph that describes all the paths one
   // can take between them; concretely, it creates a vertex every time a
   // horizontal and vertical routing line cross. (The two described layers must
   // be orthogonal in routing direction.)
-  void ConnectLayers(
-      const Layer &lhs, const Layer &rhs, const LayerConnectionInfo &info);
+  void ConnectLayers(const Layer &first, const Layer &second);
 
   bool AddRouteBetween(
       const Port &begin, const Port &end);
@@ -337,8 +316,9 @@ class RoutingGrid {
  private:
   RoutingLayerInfo *FindRoutingInfoOrDie(const Layer &layer);
 
-  std::pair<RoutingLayerInfo*, RoutingLayerInfo*> PickHorizontalAndVertical(
-    const Layer &lhs, const Layer &rhs);
+  std::pair<const RoutingLayerInfo&, const RoutingLayerInfo&>
+      PickHorizontalAndVertical(
+          const Layer &lhs, const Layer &rhs) const;
 
   std::vector<RoutingVertex*> &GetAvailableVertices(const Layer &layer);
 
@@ -372,12 +352,7 @@ class RoutingGrid {
   // The list of all available vertices per layer.
   std::map<Layer, std::vector<RoutingVertex*>> available_vertices_by_layer_;
 
-  std::map<Layer, RoutingLayerInfo> layer_infos_;
-
-  // Stores the connection info between the ith (first index) and jth (second
-  // index) layers. The "lesser" layer (std::less) should always be used to
-  // index first, so that half of the matrix can be avoided.
-  std::map<Layer, std::map<Layer, LayerConnectionInfo>> connection_infos_;
+  const PhysicalPropertiesDatabase &physical_db_;
 };
 
 }  // namespace boralago
