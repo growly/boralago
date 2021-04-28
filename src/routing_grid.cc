@@ -1,15 +1,16 @@
-#include <ostream>
 #include <algorithm>
-#include <utility>
 #include <cmath>
-#include <map>
-#include <memory>
 #include <deque>
-#include <queue>
+#include <functional>
 #include <limits>
 #include <map>
-#include <vector>
+#include <map>
+#include <memory>
+#include <ostream>
+#include <queue>
 #include <utility>
+#include <utility>
+#include <vector>
 
 #include <absl/strings/str_join.h>
 #include <glog/logging.h>
@@ -408,7 +409,11 @@ uint64_t RoutingVertex::L1DistanceTo(const Point &point) {
 }
 
 // Return the (horizontal, vertical) routing infos.
-std::pair<const RoutingLayerInfo&, const RoutingLayerInfo&>
+// TODO(aryap): UGH using make_pair makes a copy of the references?
+// I have to use std::reference_wrapper<const RoutingLayerInfo>?
+// Why don't I just use pointers, exactly?
+std::pair<std::reference_wrapper<const RoutingLayerInfo>,
+          std::reference_wrapper<const RoutingLayerInfo>>
     RoutingGrid::PickHorizontalAndVertical(
         const Layer &lhs, const Layer &rhs) const {
   const RoutingLayerInfo &lhs_info = physical_db_.GetLayerInfo(lhs);

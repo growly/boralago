@@ -316,7 +316,8 @@ class RoutingGrid {
  private:
   RoutingLayerInfo *FindRoutingInfoOrDie(const Layer &layer);
 
-  std::pair<const RoutingLayerInfo&, const RoutingLayerInfo&>
+  std::pair<std::reference_wrapper<const RoutingLayerInfo>,
+            std::reference_wrapper<const RoutingLayerInfo>>
       PickHorizontalAndVertical(
           const Layer &lhs, const Layer &rhs) const;
 
