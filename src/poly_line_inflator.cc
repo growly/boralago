@@ -120,6 +120,10 @@ void PolyLineInflator::InflatePolyLine(const PolyLine &polyline, Polygon *polygo
         // TODO(aryap): This depends on the orientation of the starting segment.
         uint64_t via_length = std::max(via_info.width, via_info.height);
         line.StretchStart(via_length / 2 + via_info.overhang);
+      } else if (polyline.start_port() != nullptr) {
+        uint64_t port_length = std::max(polyline.start_port()->Width(),
+                                        polyline.start_port()->Height());
+        line.StretchStart(port_length / 2);
       } else if (polyline.overhang_start() > 0) {
         line.StretchStart(polyline.overhang_start());
       }
@@ -129,6 +133,10 @@ void PolyLineInflator::InflatePolyLine(const PolyLine &polyline, Polygon *polygo
         const ViaInfo &via_info = physical_db_.GetViaInfo(*polyline.end_via());
         uint64_t via_length = std::max(via_info.width, via_info.height);
         line.StretchEnd(via_length / 2 + via_info.overhang);
+      } else if (polyline.end_port() != nullptr) {
+        uint64_t port_length = std::max(polyline.end_port()->Width(),
+                                        polyline.end_port()->Height());
+        line.StretchStart(port_length / 2);
       } else if (polyline.overhang_end() > 0) {
         line.StretchEnd(polyline.overhang_end());
       }

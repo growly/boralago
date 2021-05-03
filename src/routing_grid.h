@@ -151,6 +151,11 @@ class RoutingPath {
   const std::vector<RoutingEdge*> edges() const { return edges_; }
 
  private:
+  // If these ports are provided, a via will be generated or the edge on the
+  // given layer extended to correctly connect to them.
+  std::unique_ptr<Port> begin_port_;
+  std::unique_ptr<Port> end_port_;
+
   // The ordered list of vertices making up the path. The edges alone, since
   // they are undirected, do not yield this directional information.
   // These vertices are OWNED by RoutingPath.

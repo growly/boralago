@@ -9,6 +9,7 @@ namespace boralago {
 
 class Cell;
 
+// TODO(aryap): Is a port an abstract shape or not?
 class Port : public Shape {
  public:
   // TODO(aryap): Wait, is a port just a rect with some other stuff? So this is
@@ -26,6 +27,9 @@ class Port : public Shape {
     : lower_left_(lower_left),
       upper_right_(upper_right),
       Shape(layer,  net) {}
+
+  uint64_t Width() const { return upper_right_.x() - lower_left_.x(); }
+  uint64_t Height() const { return upper_right_.y() - lower_left_.y(); }
 
   const std::pair<Point, Point> GetBoundingBox() const override {
     return std::make_pair(lower_left_, upper_right_);

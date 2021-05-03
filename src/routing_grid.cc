@@ -697,8 +697,7 @@ void RoutingGrid::AddVertex(RoutingVertex *vertex) {
   vertices_.push_back(vertex);  // The class owns all of these.
 }
 
-bool RoutingGrid::AddRouteBetween(
-    const Port &begin, const Port &end) {
+bool RoutingGrid::AddRouteBetween(const Port &begin, const Port &end) {
   RoutingVertex *begin_vertex = GenerateGridVertexForPoint(
       begin.centre(), begin.layer());
   if (!begin_vertex) {

@@ -2,9 +2,11 @@
 #define POLY_LINE_H_
 
 #include <cstdint>
+#include <memory>
 
 #include "line_segment.h"
 #include "point.h"
+#include "port.h"
 #include "shape.h"
 #include "via.h"
 
@@ -45,6 +47,11 @@ class PolyLine : public Shape {
   Via *end_via() const { return end_via_; }
   void set_end_via(Via *via) { end_via_ = via; }
 
+  Port *start_port() const { return start_port_; }
+  void set_start_port(Port *port) { start_port_ = port; }
+  Port *end_port() const { return end_port_; }
+  void set_end_port(Port *port) { end_port_ = port; }
+
   const std::vector<LineSegment> &segments() const { return segments_; }
 
  private:
@@ -62,6 +69,13 @@ class PolyLine : public Shape {
   // to vias at the start or end.
   Via *start_via_;
   Via *end_via_;
+
+  // TODO(aryap): Same with ports. The PolyLine might not connect between vias,
+  // but there will be special rules to make sure it connects to a port,
+  // whatever that is. It might be, for example, a via, or another rectangle on
+  // the same layer which we need to overlap.
+  Port *start_port_;
+  Port *end_port_;
 
   std::vector<LineSegment> segments_;
 };
