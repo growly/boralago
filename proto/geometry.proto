@@ -1,6 +1,6 @@
 syntax = "proto3";
 
-package vlsiraptor;
+package vlsirlol;
 
 // Represents a point in our (Cartesian) layout space.
 message Point {
@@ -14,7 +14,7 @@ message Layer {
 }
 
 message QualifiedName {
-  string namespace = 1;
+  string domain = 1;
   string name = 2;
 }
 
@@ -34,8 +34,8 @@ message Polygon {
   // The name of the net to which this polygon is connected, if any.
   string net = 1;
 
-  // The list of vertices defining the (convex) polygon. We assume that the
-  // last and first point will also be joined by a line segment.
+  // The list of vertices defining the polygon. We assume that the last and
+  // first point will also be joined by a line segment.
   repeated Point vertices = 2;
 }
 
@@ -72,6 +72,9 @@ message Instance {
 }
 
 message Geometry {
-  // The top instance.
+  // The top instance. These refer to cells included below.
   Instance top_instance = 1;
+
+  // Descriptions of known cells.
+  repeated Cell cells = 2;
 }
