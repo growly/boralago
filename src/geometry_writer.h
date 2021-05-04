@@ -20,7 +20,9 @@ class GeometryWriter {
       : physical_db_(physical_db) {}
   bool WriteCell(const Cell &top, const std::string &filename);
   void WriteCellText(const Cell &top, const std::string &filename);
-  void AddToGeometry(const Cell &top, vlsirlol::Geometry *geometry);
+  void AddToGeometry(const Cell &top,
+                     std::set<Cell*> *skip_cells,
+                     vlsirlol::Geometry *geometry);
 
   void MapToExternalPoint(
       const Point &internal, vlsirlol::Point *external);
@@ -30,6 +32,9 @@ class GeometryWriter {
 
   void PolygonToProto(
       const Polygon &rectangle, vlsirlol::Polygon *out);
+
+  void InstanceToProto(
+      const Instance &instance, vlsirlol::Instance *out);
 
   const PhysicalPropertiesDatabase &physical_db_;
 };

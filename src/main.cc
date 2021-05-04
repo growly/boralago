@@ -95,17 +95,17 @@ int main(int argc, char **argv) {
   // Tile the cell.
   boralago::Cell top;
 
-  // auto box = cell.GetBoundingBox();
-  // int64_t dx = box.second.x() - box.first.x();
-  // int64_t buffer_x = 10;
-  // int64_t dy = box.second.y() - box.first.y();
-  // int64_t buffer_y = 10;
-  // for (int i = 0; i < 9; ++i) {
-  //   for (int j = 0; j < 6; ++j) {
-  //     top.AddInstance(boralago::Instance{
-  //         &cell, boralago::Point(i*(dx + buffer_x), j*(dy + buffer_y))});
-  //   }
-  // }
+  auto box = cell.GetBoundingBox();
+  int64_t dx = box.second.x() - box.first.x();
+  int64_t buffer_x = 10;
+  int64_t dy = box.second.y() - box.first.y();
+  int64_t buffer_y = 10;
+  for (int i = 0; i < 9; ++i) {
+    for (int j = 0; j < 6; ++j) {
+      top.AddInstance(boralago::Instance{
+          &cell, boralago::Point(i*(dx + buffer_x), j*(dy + buffer_y))});
+    }
+  }
 
   // Create a routing grid.
 

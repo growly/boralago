@@ -12,7 +12,8 @@ namespace boralago {
 
 bool GeometryWriter::WriteCell(const Cell &top, const std::string &filename) {
   vlsirlol::Geometry geo;
-  AddToGeometry(top, &geo);
+  std::set<Cell*> known_child_cells;
+  AddToGeometry(top, &known_child_cells, &geo);
   std::fstream output(
       filename.c_str(), std::ios::out | std::ios::trunc | std::ios::binary);
   return geo.SerializeToOstream(&output);
@@ -20,7 +21,8 @@ bool GeometryWriter::WriteCell(const Cell &top, const std::string &filename) {
 
 void GeometryWriter::WriteCellText(const Cell &top, const std::string &filename) {
   vlsirlol::Geometry geo;
-  AddToGeometry(top, &geo);
+  std::set<Cell*> known_child_cells;
+  AddToGeometry(top, &known_child_cells, &geo);
   std::string text_format;
   google::protobuf::TextFormat::PrintToString(geo, &text_format);
   std::fstream output(filename.c_str(), std::ios::out | std::ios::trunc);
@@ -34,9 +36,12 @@ void GeometryWriter::MapToExternalPoint(
   external->set_y(physical_db_.ToExternalUnits(internal.y()));
 }
 
-void GeometryWriter::AddToGeometry(const Cell &top, vlsirlol::Geometry *geometry) {
+void GeometryWriter::AddToGeometry(
+    const Cell &top,
+    std::set<Cell*> *skip_cells,
+    vlsirlol::Geometry *geometry) {
   vlsirlol::Cell *cell_pb = geometry->add_cells();
-  cell_pb->mutable_name()->set_domain("boralago");
+  cell_pb->mutable_name()->set_domain("BORALAGO TEST");
   cell_pb->mutable_name()->set_name(top.name());
 
   std::set<Layer> layers;
@@ -87,15 +92,20 @@ void GeometryWriter::AddToGeometry(const Cell &top, vlsirlol::Geometry *geometry
     }
   }
   
-  // Add child instances and the references to them.
+  // Add the description of each child cell if it is new to us. Add references
+  // to any used cells.
   for (const Instance &instance : top.instances()) {
     Cell *cell = instance.template_cell();
-    AddToGeometry(*cell, geometry);
+    // TODO(aryap): Cells are canonically described by their name, yet our
+    // "skip_cells" set implies that the identity is their pointer (memory
+    // location). It would be more robust to have a registry, since that would
+    // also facilitate multithreaded processing.
+    if (skip_cells->find(cell) == skip_cells->end()) {
+      AddToGeometry(*cell, skip_cells, geometry);
+      skip_cells->insert(cell);
+    }
     vlsirlol::Instance *instance_pb = cell_pb->add_instances();
-    instance_pb->mutable_name()->set_domain("boralago");
-    instance_pb->mutable_name()->set_name(cell->name());
-    instance_pb->set_rotation_clockwise_degrees(0);
-    instance_pb->mutable_lower_left()->set_x(0);
+    InstanceToProto(instance, instance_pb);
   }
 }
 
@@ -116,6 +126,14 @@ void GeometryWriter::PolygonToProto(
     vlsirlol::Point *point_pb = out->add_vertices();
     MapToExternalPoint(point, point_pb);
   }
+}
+
+void GeometryWriter::InstanceToProto(
+    const Instance &instance, vlsirlol::Instance *out) {
+  out->mutable_name()->set_domain("BORALAGO TEST");
+  out->mutable_name()->set_name(instance.template_cell()->name());
+  out->set_rotation_clockwise_degrees(0);
+  MapToExternalPoint(instance.lower_left(), out->mutable_lower_left());
 }
 
 }   // namespace boralago
