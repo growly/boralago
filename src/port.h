@@ -3,50 +3,30 @@
 
 #include "layer.h"
 #include "point.h"
-#include "shape.h"
+#include "rectangle.h"
 
 namespace boralago {
 
 class Cell;
 
 // TODO(aryap): Is a port an abstract shape or not?
-class Port : public Shape {
+class Port : public Rectangle {
  public:
   // TODO(aryap): Wait, is a port just a rect with some other stuff? So this is
   // a rect:
   Port(const Point &centre, uint64_t width, uint64_t height,
        const Layer &layer, const std::string &net)
-    : Shape(layer, net) {
+    {
     lower_left_ = Point(centre.x() - width / 2,
                         centre.y() - height / 2);
     upper_right_ = lower_left_ + Point(width, height);
+    layer_ = layer;
+    net_ = net;
   }
 
   Port(const Point &lower_left, const Point &upper_right,
        const Layer &layer, const std::string &net)
-    : lower_left_(lower_left),
-      upper_right_(upper_right),
-      Shape(layer,  net) {}
-
-  uint64_t Width() const { return upper_right_.x() - lower_left_.x(); }
-  uint64_t Height() const { return upper_right_.y() - lower_left_.y(); }
-
-  const std::pair<Point, Point> GetBoundingBox() const override {
-    return std::make_pair(lower_left_, upper_right_);
-  }
-
-  // TODO(aryap): Hmmm. Not a double. Truncating. Hmmm.
-  Point centre() const {
-    return Point((lower_left_.x() + upper_right_.x()) / 2,
-                 (lower_left_.y() + upper_right_.y()) / 2);
-  }
-
-  const Point &lower_left() const { return lower_left_; }
-  const Point &upper_right() const { return upper_right_; }
-
- private:
-  Point lower_left_;
-  Point upper_right_;
+    : Rectangle(lower_left, upper_right, layer, net) {}
 };
 
 }  // namespace boralago

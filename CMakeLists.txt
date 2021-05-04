@@ -18,6 +18,7 @@ include_directories(${CMAKE_CURRENT_BINARY_DIR})  # TODO(aryap): Ugh.
 # set(Protobuf_IMPORT_DIRS ...)
 # set(Protobuf_DEBUG ...)
 protobuf_generate_cpp(PROTO_SRCS PROTO_HDRS proto/inflator_rules.proto)
+protobuf_generate_cpp(PROTO_SRCS PROTO_HDRS proto/geometry.proto)
 
 # skia includes
 set(Skia_BUILD_DIR "${CMAKE_SOURCE_DIR}/third_party/skia" CACHE PATH "Skia build directory" FORCE)
@@ -32,6 +33,7 @@ find_library(Skia_LIBRARY
 add_executable(boralago
                 src/cell.cc
                 src/instance.cc
+                src/geometry_writer.cc
                 src/line.cc
                 src/main.cc
                 src/physical_properties_database.cc

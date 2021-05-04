@@ -21,6 +21,8 @@ Cell PolyLineInflator::Inflate(const PolyLineCell &poly_line_cell) {
 
     Polygon polygon;
     InflatePolyLine(*poly_line, &polygon);
+    polygon.set_layer(poly_line->layer());
+
     auto bb = polygon.GetBoundingBox();
     LOG(INFO) << polygon << " bounded by ll= " << bb.first << " ur= " << bb.second;
     cell.AddPolygon(polygon);

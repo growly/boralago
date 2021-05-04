@@ -12,14 +12,15 @@
 
 #include "c_make_header.h"
 
-#include "physical_properties_database.h"
-#include "routing_grid.h"
-#include "renderer.h"
-#include "rectangle.h"
+#include "geometry_writer.h"
+#include "inflator_rules.pb.h"
 #include "instance.h"
+#include "physical_properties_database.h"
 #include "poly_line_cell.h"
 #include "poly_line_inflator.h"
-#include "inflator_rules.pb.h"
+#include "rectangle.h"
+#include "renderer.h"
+#include "routing_grid.h"
 
 DEFINE_string(example_flag, "default", "for later");
 
@@ -48,6 +49,7 @@ int main(int argc, char **argv) {
   layer_2.direction = boralago::RoutingTrackDirection::kTrackHorizontal;
 
   boralago::ViaInfo layer_1_2;
+  layer_1_2.layer = 6;
   layer_1_2.cost = 1.0;
   layer_1_2.width = 30;
   layer_1_2.height = 30;
@@ -125,6 +127,9 @@ int main(int argc, char **argv) {
   boralago::Renderer renderer(2048, 2048);
   renderer.RenderToPNG(top, "top.png");
   renderer.RenderToPNG(inverter, top, grid, "mess.png");
+
+  boralago::GeometryWriter geometry_writer(physical_db);
+  geometry_writer.WriteCellText(top, "geometry.txt");
 
   LOG(INFO) << "done";
 

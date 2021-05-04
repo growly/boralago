@@ -22,9 +22,9 @@ class AbstractShape {
   const Layer &layer() const { return layer_; }
 
   void set_net(const std::string &net) { net_ = net; }
-  const std::string &net() { return net_; }
+  const std::string &net() const { return net_; }
 
- private:
+ protected:
   Layer layer_;
   std::string net_;
 };

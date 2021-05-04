@@ -34,6 +34,15 @@ class Rectangle : public Shape {
   bool Overlaps(const Rectangle &other) const;
   const Rectangle OverlapWith(const Rectangle &other) const;
 
+  uint64_t Width() const { return upper_right_.x() - lower_left_.x(); }
+  uint64_t Height() const { return upper_right_.y() - lower_left_.y(); }
+
+  // TODO(aryap): Hmmm. Not a double. Truncating. Hmmm.
+  Point centre() const {
+    return Point((lower_left_.x() + upper_right_.x()) / 2,
+                 (lower_left_.y() + upper_right_.y()) / 2);
+  }
+
   const std::pair<Point, Point> GetBoundingBox() const override {
     return std::make_pair(lower_left_, upper_right_);
   }
@@ -44,7 +53,7 @@ class Rectangle : public Shape {
   const Point &upper_right() const { return upper_right_; }
   void set_upper_right(const Point &upper_right) { upper_right_ = upper_right; }
 
- private:
+ protected:
   Point lower_left_;
   Point upper_right_;
 };

@@ -42,7 +42,21 @@ struct ViaInfo {
 // Manages information about physical layout constraints.
 class PhysicalPropertiesDatabase {
  public:
-  PhysicalPropertiesDatabase() {}
+  PhysicalPropertiesDatabase()
+      : internal_units_per_external_(0.001) {}
+
+  // Internally, all positions and lengths are computed in integer units.
+  // Externally to this program, the user probably expects real units, like
+  // mircons or nanometres (i.e. not yards or inches or anything stupid like
+  // that). When setting up a process, we must define the conversion factor
+  // between external and internal units.
+  int64_t ToInternalUnits(const int64_t external_value) const {
+    return external_value * internal_units_per_external_;
+  }
+  int64_t ToExternalUnits(const int64_t internal_value) const {
+    return internal_value / internal_units_per_external_;
+  }
+
 
   void AddLayer(const RoutingLayerInfo &info);
   const RoutingLayerInfo &GetLayerInfo(const Layer &layer) const;
@@ -55,6 +69,8 @@ class PhysicalPropertiesDatabase {
   const ViaInfo &GetViaInfo(const Layer &lhs, const Layer &rhs);
 
  private:
+  double internal_units_per_external_;
+
   std::map<Layer, RoutingLayerInfo> layer_infos_;
 
   // Stores the connection info between the ith (first index) and jth (second

@@ -89,6 +89,12 @@ void RoutingPath::ToPolyLinesAndVias(
   }
   last->AddSegment(vertices_.back()->centre());
   polylines->push_back(std::move(last));
+
+  // Copy pointers to the start and end ports, if any.
+  if (!polylines->empty()) {
+    polylines->front()->set_start_port(start_port_);
+    polylines->front()->set_end_port(end_port_);
+  }
 }
 
 std::ostream &operator<<(std::ostream &os, const RoutingPath &path) {
@@ -721,6 +727,10 @@ bool RoutingGrid::AddRouteBetween(const Port &begin, const Port &end) {
     LOG(WARNING) << "No path found.";
     return false;
   }
+
+  // Remember the ports to which the path should connect.
+  shortest_path->set_start_port(&begin);
+  shortest_path->set_end_port(&begin);
 
   LOG(INFO) << "Found path: " << *shortest_path;
 

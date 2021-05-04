@@ -47,10 +47,10 @@ class PolyLine : public Shape {
   Via *end_via() const { return end_via_; }
   void set_end_via(Via *via) { end_via_ = via; }
 
-  Port *start_port() const { return start_port_; }
-  void set_start_port(Port *port) { start_port_ = port; }
-  Port *end_port() const { return end_port_; }
-  void set_end_port(Port *port) { end_port_ = port; }
+  const Port *start_port() const { return start_port_; }
+  void set_start_port(const Port *port) { start_port_ = port; }
+  const Port *end_port() const { return end_port_; }
+  void set_end_port(const Port *port) { end_port_ = port; }
 
   const std::vector<LineSegment> &segments() const { return segments_; }
 
@@ -74,8 +74,8 @@ class PolyLine : public Shape {
   // but there will be special rules to make sure it connects to a port,
   // whatever that is. It might be, for example, a via, or another rectangle on
   // the same layer which we need to overlap.
-  Port *start_port_;
-  Port *end_port_;
+  const Port *start_port_;
+  const Port *end_port_;
 
   std::vector<LineSegment> segments_;
 };
