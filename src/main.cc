@@ -12,7 +12,7 @@
 
 #include "c_make_header.h"
 
-#include "geometry_writer.h"
+#include "geometry_adapter.h"
 #include "inflator_rules.pb.h"
 #include "instance.h"
 #include "physical_properties_database.h"
@@ -59,7 +59,6 @@ int main(int argc, char **argv) {
   physical_db.AddLayer(layer_1);
   physical_db.AddLayer(layer_2);
   physical_db.AddViaInfo(layer_1.layer, layer_2.layer, layer_1_2);
-
 
   // A dummy cell.
   boralago::PolyLineCell inverter;
@@ -108,7 +107,6 @@ int main(int argc, char **argv) {
   }
 
   // Create a routing grid.
-
   boralago::RoutingGrid grid(physical_db);
   grid.ConnectLayers(layer_1.layer, layer_2.layer);
 
@@ -128,7 +126,7 @@ int main(int argc, char **argv) {
   renderer.RenderToPNG(top, "top.png");
   renderer.RenderToPNG(inverter, top, grid, "mess.png");
 
-  boralago::GeometryWriter geometry_writer(physical_db);
+  boralago::GeometryAdapter geometry_writer(physical_db);
   geometry_writer.WriteCellText(top, "geometry.txt");
 
   LOG(INFO) << "done";

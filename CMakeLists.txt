@@ -31,11 +31,15 @@ find_library(Skia_LIBRARY
   PATH ${Skia_BUILD_DIR}/trunk/out/Release)
 
 add_executable(boralago
+                src/bundle.cc
                 src/cell.cc
+                src/circuit.cc
+                src/circuit_element.cc
+                src/geometry_adapter.cc
                 src/instance.cc
-                src/geometry_writer.cc
                 src/line.cc
                 src/main.cc
+                src/node.cc
                 src/physical_properties_database.cc
                 src/point.cc
                 src/poly_line.cc

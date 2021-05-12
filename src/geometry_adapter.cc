@@ -1,4 +1,4 @@
-#include "geometry_writer.h"
+#include "geometry_adapter.h"
 
 #include <algorithm>
 #include <string>
@@ -10,7 +10,7 @@
 
 namespace boralago {
 
-bool GeometryWriter::WriteCell(const Cell &top, const std::string &filename) {
+bool GeometryAdapter::WriteCell(const Cell &top, const std::string &filename) {
   vlsirlol::Geometry geo;
   std::set<Cell*> known_child_cells;
   AddToGeometry(top, &known_child_cells, &geo);
@@ -19,7 +19,7 @@ bool GeometryWriter::WriteCell(const Cell &top, const std::string &filename) {
   return geo.SerializeToOstream(&output);
 }
 
-void GeometryWriter::WriteCellText(const Cell &top, const std::string &filename) {
+void GeometryAdapter::WriteCellText(const Cell &top, const std::string &filename) {
   vlsirlol::Geometry geo;
   std::set<Cell*> known_child_cells;
   AddToGeometry(top, &known_child_cells, &geo);
@@ -30,13 +30,13 @@ void GeometryWriter::WriteCellText(const Cell &top, const std::string &filename)
   output.close();
 }
 
-void GeometryWriter::MapToExternalPoint(
+void GeometryAdapter::MapToExternalPoint(
     const Point &internal, vlsirlol::Point *external) {
   external->set_x(physical_db_.ToExternalUnits(internal.x()));
   external->set_y(physical_db_.ToExternalUnits(internal.y()));
 }
 
-void GeometryWriter::AddToGeometry(
+void GeometryAdapter::AddToGeometry(
     const Cell &top,
     std::set<Cell*> *skip_cells,
     vlsirlol::Geometry *geometry) {
@@ -109,7 +109,7 @@ void GeometryWriter::AddToGeometry(
   }
 }
 
-void GeometryWriter::RectangleToProto(
+void GeometryAdapter::RectangleToProto(
     const Rectangle &rectangle, vlsirlol::Rectangle *out) {
   out->set_net(rectangle.net());
   MapToExternalPoint(rectangle.lower_left(), out->mutable_lower_left());
@@ -119,7 +119,7 @@ void GeometryWriter::RectangleToProto(
   out->set_height(height);
 }
 
-void GeometryWriter::PolygonToProto(
+void GeometryAdapter::PolygonToProto(
     const Polygon &polygon, vlsirlol::Polygon *out) {
   out->set_net(polygon.net());
   for (const Point &point : polygon.vertices()) {
@@ -128,7 +128,7 @@ void GeometryWriter::PolygonToProto(
   }
 }
 
-void GeometryWriter::InstanceToProto(
+void GeometryAdapter::InstanceToProto(
     const Instance &instance, vlsirlol::Instance *out) {
   out->mutable_name()->set_domain("BORALAGO TEST");
   out->mutable_name()->set_name(instance.template_cell()->name());

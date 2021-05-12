@@ -1,5 +1,5 @@
-#ifndef GEOMETRY_WRITER_H_
-#define GEOMETRY_WRITER_H_
+#ifndef GEOMETRY_ADAPTER_H_
+#define GEOMETRY_ADAPTER_H_
 
 #include <string>
 
@@ -8,15 +8,14 @@
 #include "cell.h"
 #include "physical_properties_database.h"
 
-
 namespace boralago {
 
 class Cell;
 
 // TODO(aryap): Is a port an abstract shape or not?
-class GeometryWriter {
+class GeometryAdapter {
  public:
-  GeometryWriter(const PhysicalPropertiesDatabase &physical_db)
+  GeometryAdapter(const PhysicalPropertiesDatabase &physical_db)
       : physical_db_(physical_db) {}
   bool WriteCell(const Cell &top, const std::string &filename);
   void WriteCellText(const Cell &top, const std::string &filename);
@@ -41,4 +40,4 @@ class GeometryWriter {
 
 }  // namespace boralago
 
-#endif  // GEOMETRY_WRITER_H_
+#endif  // GEOMETRY_ADAPTER_H_
