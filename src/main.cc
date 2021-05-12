@@ -24,6 +24,10 @@
 
 DEFINE_string(example_flag, "default", "for later");
 
+// TODO(aryap): Separate layout, circuit components into their own namespaces,
+// folders? They seem to solve very different problems and should be largely
+// independent.
+
 int main(int argc, char **argv) {
   google::ParseCommandLineFlags(&argc, &argv, true);
   google::InitGoogleLogging(argv[0]);
@@ -126,8 +130,8 @@ int main(int argc, char **argv) {
   renderer.RenderToPNG(top, "top.png");
   renderer.RenderToPNG(inverter, top, grid, "mess.png");
 
-  boralago::GeometryAdapter geometry_writer(physical_db);
-  geometry_writer.WriteCellText(top, "geometry.txt");
+  boralago::GeometryAdapter geometry_adapter(physical_db);
+  geometry_adapter.WriteCellText(top, "geometry.txt");
 
   LOG(INFO) << "done";
 
